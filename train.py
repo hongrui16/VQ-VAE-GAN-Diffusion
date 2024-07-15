@@ -56,10 +56,11 @@ def main(args, config):
     vqgan = VQGAN(**config["architecture"]["vqgan"])
     logging.info(f"VQGAN model created")
 
-    vqgan_transformer = VQGANTransformer(
-        vqgan, **config["architecture"]["transformer"], device=device
-    )
-    logging.info(f"VQGAN Transformer models created")
+    if args.train_transformer:
+        vqgan_transformer = VQGANTransformer(
+            vqgan, **config["architecture"]["transformer"], device=device
+        )
+        logging.info(f"VQGAN Transformer models created")
 
     train_dataloader, train_dataset = load_dataloader(name=args.dataset_name, batch_size = args.batch_size, split='train', logger=logger)
     val_dataloader, val_dataset = load_dataloader(name=args.dataset_name,  batch_size = args.batch_size, split='val', logger=logger)
@@ -115,21 +116,22 @@ def main(args, config):
     # logging.info(f"Generating images using {args.model_name}")
     # vqgan_trainer.vqgan_generate_images(dataloader = val_dataloader)
 
-    vqganTransformer_trainer = VAGANTransformerTrainer(
-        model=vqgan_transformer,
-        run=run,
-        device=device,
-        experiment_dir=exp_dir,
-        model_name = args.model_name,
-        logger = logger,
-        save_img_dir = save_dir,
-        args = args,
-        val_dataloader=val_dataloader,
-        **config['trainer']["transformer"],
-    )
+    if args.train_transformer:
+        vqganTransformer_trainer = VAGANTransformerTrainer(
+            model=vqgan_transformer,
+            run=run,
+            device=device,
+            experiment_dir=exp_dir,
+            model_name = args.model_name,
+            logger = logger,
+            save_img_dir = save_dir,
+            args = args,
+            val_dataloader=val_dataloader,
+            **config['trainer']["transformer"],
+        )
 
-    logger.info(f"Training {args.model_name} Transformer on {device} for {args.num_epochs} epoch(s).")
-    vqganTransformer_trainer.train(dataloader=train_dataloader, epochs=args.num_epochs)
+        logger.info(f"Training {args.model_name} Transformer on {device} for {args.num_epochs} epoch(s).")
+        vqganTransformer_trainer.train(dataloader=train_dataloader, epochs=args.num_epochs)
 
 
     # logging.info(f"Generating images using {args.model_name} Transformer")
@@ -208,6 +210,13 @@ if __name__ == "__main__":
         type=str,
         default=None,
         help='path to the checkpoint to resume training')
+    
+    parser.add_argument(
+        '--no_train_transformer',
+        action='store_false',
+        dest='train_transformer',
+        help='Do not train the transformer (default is to train)'
+    )
 
 
     args = parser.parse_args()
