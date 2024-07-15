@@ -3,9 +3,9 @@ import argparse
 
 import yaml
 
-from trainer import Trainer
-from transformer import VQGANTransformer
-from vqgan import VQGAN
+from trainer.trainer import Trainer
+from network.vqganTransformer.vqganTransformer import VQGANTransformer
+from network.vqgan.vqgan import VQGAN
 
 
 def main(args, config):

@@ -5,7 +5,10 @@ Contains test functions for the VQGAN model.
 # Importing Libraries
 import torch
 
-from vqgan import Encoder, Decoder, CodeBook, Discriminator
+from network.vqgan.encoder import Encoder
+from network.vqgan.decoder import Decoder
+from network.vqgan.codebook import CodeBook
+from network.vqgan.discriminator import Discriminator
 
 
 def test_encoder():

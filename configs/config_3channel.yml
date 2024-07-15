@@ -1,6 +1,6 @@
 architecture:
   vqgan:
-    img_channels: 1
+    img_channels: 3
     img_size: 256
     latent_channels: 256
     latent_size: 16
@@ -29,8 +29,14 @@ trainer:
     disc_factor: 1.0
     disc_start: 100
     perceptual_model: "vgg"
+    # weight_path: "vgg16.pth"
 
   transformer:
     learning_rate: 4.5e-06
     beta1: 0.9
     beta2: 0.95
+    # weight_path: "gpt2.pth"
+  
+  # descriminator:
+  #   weight_path: "vgg16.pth"
+

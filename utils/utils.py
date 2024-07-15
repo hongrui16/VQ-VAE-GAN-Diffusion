@@ -98,3 +98,34 @@ def collate_fn(batch):
     imgs = torch.stack([img[0] for img in batch])
 
     return imgs
+
+def print_gpu_memory_usage(logger=None):
+    if torch.cuda.is_available():
+        for i in range(torch.cuda.device_count()):
+            if logger is not None:
+                logger.info(f"GPU {i}:")
+                logger.info(f"  Allocated: {torch.cuda.memory_allocated(i) / 1024 ** 3:.2f} GB")
+                logger.info(f"  Cached:    {torch.cuda.memory_reserved(i) / 1024 ** 3:.2f} GB")
+            else:
+                print(f"GPU {i}:")
+                print(f"  Allocated: {torch.cuda.memory_allocated(i) / 1024 ** 3:.2f} GB")
+                print(f"  Cached:    {torch.cuda.memory_reserved(i) / 1024 ** 3:.2f} GB")
+    else:
+        if logger is not None:
+            logger.info("No GPU available.")
+        else:
+            print("No GPU available.")
+
+# 定义逆归一化函数
+def denormalize(tensor, mean, std):
+    """
+    将标准化后的图像逆归一化
+    tensor: 标准化后的张量
+    mean: 归一化使用的均值
+    std: 归一化使用的标准差
+    """
+
+    mean = torch.tensor(mean).view(1, 3, 1, 1).to(tensor.device)
+    std = torch.tensor(std).view(1, 3, 1, 1).to(tensor.device)
+    return tensor * std + mean
+
