@@ -25,10 +25,11 @@ import os, sys
 
 
 class InterHand26M(torch.utils.data.Dataset):
-    def __init__(self, root_dir, split, transform = None, return_annotation=False):
+    def __init__(self, root_dir, split, transform = None, return_annotation=False, logger=None):
         assert split in ['train', 'val', 'test'] # data_split: train, val, test
         self.transform = transform
         self.data_split = split
+        self.logger = logger
         # self.img_path = osp.join('..', 'data', 'InterHand26M', 'images')
         # self.annot_path = osp.join('..', 'data', 'InterHand26M', 'annotations')
         self.root_dir = root_dir
@@ -96,8 +97,14 @@ class InterHand26M(torch.utils.data.Dataset):
         h, w = hand_img.shape[:2]
         max_size = max(h, w)
         hand_img = cv2.copyMakeBorder(hand_img, 0, max_size - h, 0, max_size - w, cv2.BORDER_CONSTANT, value=(0, 0, 0))
-
-        hand_img = Image.fromarray(hand_img)
+        try:
+            if isinstance(hand_img, np.ndarray):
+                hand_img = Image.fromarray(hand_img)
+        except:
+            self.logger.info(f'Error: {img_path}')
+            idx = random.randint(0, len(self.datalist))
+            return self.__getitem__(idx)
+        
         if self.transform:
             hand_img = self.transform(hand_img)
         hand_data = {
@@ -115,8 +122,13 @@ if __name__ == '__main__':
     from torch.utils.data import DataLoader
     from tqdm import tqdm
     import matplotlib.pyplot as plt
+    import cv2
+    import logging
 
     data_dir = '/scratch/rhong5/dataset/InterHand/InterHand2.6M_5fps_batch1'
+    log_path = 'InterHand26M.log'
+    logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(log_path), logging.StreamHandler()])
+    logger = logging.getLogger(f'InterHand26M-LOG')
 
     trans = transforms.Compose([    
         transforms.Resize((256, 256)),
@@ -128,7 +140,7 @@ if __name__ == '__main__':
     ])
 
 
-    dataset = InterHand26M('val', root_dir=data_dir, transform=trans)
+    dataset = InterHand26M('val', root_dir=data_dir, transform=trans, logger=logger)
 
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=1)

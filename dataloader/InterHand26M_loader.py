@@ -15,13 +15,15 @@ from torchvision import transforms
 
 import os, sys
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
-
+if __name__ == '__main__':
+    sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+)
 from dataloader.dataset.InterHand26M import InterHand26M
 
 def load_InterHand26M(
     batch_size: int = 2,
     image_size: int = 256,
-    num_workers: int = 4,
+    num_workers: int = 6,
     save_path: str = None,
     split: str = 'train',
     logger=None,
@@ -46,7 +48,7 @@ def load_InterHand26M(
         data_dir = save_path
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory {data_dir} does not exist.")
-    
+
     if split == 'train':
         data_transforms = transforms.Compose([    
             transforms.Resize((image_size, image_size)),
@@ -64,7 +66,7 @@ def load_InterHand26M(
         ])
 
 
-    dataset = InterHand26M(data_dir, split, transform=data_transforms)
+    dataset = InterHand26M(data_dir, split, transform=data_transforms, logger=logger)
     
     if logger is not None:
         logger.info(f"Number of {split} samples: {len(dataset)}")
@@ -77,7 +79,7 @@ def load_InterHand26M(
     else:
         shuffle = False
         drop_last = False
-    num_workers = 6
+    # num_workers = 6
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
 
 
@@ -85,8 +87,15 @@ def load_InterHand26M(
 
 
 if __name__ == '__main__':
-    dataloader = load_InterHand26M(split= 'val')
+    import logging
+
+    log_path = 'InterHand26M.log'
+    logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(log_path), logging.StreamHandler()])
+    logger = logging.getLogger(f'InterHand26M-LOG')
+    
+    batch_size = 300
+
+    dataloader, dataset = load_InterHand26M(batch_size = batch_size, image_size=20, num_workers = 6, split= 'train', logger=logger)
+    num_batches = len(dataset)//batch_size
     for i, data in enumerate(dataloader):
-        print(i, data['img'].shape)
-        if i == 10:
-            break
+        print(f'{i}/{num_batches}, {data.shape}')

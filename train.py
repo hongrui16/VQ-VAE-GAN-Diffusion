@@ -34,7 +34,7 @@ def main(args, config):
     
     # Log to file & tensorboard writer
     logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(log_path), logging.StreamHandler()])
-    logger = logging.getLogger('VQGAN-LOG')
+    logger = logging.getLogger(f'{args.model_name}-LOG')
     logging.info(f"Logging to {exp_dir}")
 
     ## print all the args into log file
@@ -54,13 +54,13 @@ def main(args, config):
         logging.info("Using CPU")
 
     vqgan = VQGAN(**config["architecture"]["vqgan"])
-    logging.info(f"VQGAN model created")
+    logging.info(f"{args.model_name} model created")
 
     if args.train_transformer:
         vqgan_transformer = VQGANTransformer(
             vqgan, **config["architecture"]["transformer"], device=device
         )
-        logging.info(f"VQGAN Transformer models created")
+        logging.info(f"{args.model_name} Transformer models created")
 
     train_dataloader, train_dataset = load_dataloader(name=args.dataset_name, batch_size = args.batch_size, split='train', logger=logger)
     val_dataloader, val_dataset = load_dataloader(name=args.dataset_name,  batch_size = args.batch_size, split='val', logger=logger)
@@ -229,9 +229,9 @@ if __name__ == "__main__":
 
 
 '''
-salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=4 --gres=gpu:A100.80gb:1 --mem=80gb -t 0-24:00:00
-salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=4 --gres=gpu:A100.40gb:1 --mem=40gb -t 0-24:00:00
-salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=4 --gres=gpu:3g.40gb:1 --mem=40gb -t 0-24:00:00
-salloc -p contrib-gpuq -q gpu --nodes=1 --ntasks-per-node=4 --gres=gpu:3g.40gb:1 --mem=40gb -t 0-12:00:00
+salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:A100.80gb:1 --mem=80gb -t 0-24:00:00
+salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:A100.40gb:1 --mem=40gb -t 0-24:00:00
+salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:3g.40gb:1 --mem=40gb -t 0-24:00:00
+salloc -p contrib-gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:3g.40gb:1 --mem=40gb -t 0-12:00:00
 
 '''
