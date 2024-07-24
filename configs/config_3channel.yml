@@ -1,7 +1,7 @@
 architecture:
   model_name: "vqdiffusion" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion
   vqvae:
-    img_channels: 1 # 1, 3
+    img_channels: 3 # 1, 3
     img_size: 256
     latent_channels: 256
     latent_size: 16
@@ -11,7 +11,7 @@ architecture:
     dropout: 0.0
     attention_resolution: [16]
     num_codebook_vectors: 1024
-    resume_path: None
+    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
     train_vqvae: False # True, False
 
 
@@ -32,18 +32,18 @@ architecture:
     diffusion_steps: 100
     sampling_steps: 100
     noise_schedule: "linear"
-    diffusion_type: 'Continuous' #'VQ_Official', 'Continuous'
+    diffusion_type: 'VQ_Official' #'VQ_Official', 'Continuous'
     objective: 'pred_noise'
     resume_path: None
     train_diffusion: True
 
 
 trainer:
-  batch_size: 1
-  num_workers: 4
-  num_epochs: 30
+  batch_size: 50
+  num_workers: 5
+  num_epochs: 60
   log_dir: "log"
-  dataset_name: 'mnist' # mnist, cifar10, InterHand26M, Oxford102Flower
+  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
   
 
   vqvae:
@@ -65,7 +65,7 @@ trainer:
     resume_path: None
 
   diffusion:
-    learning_rate: 1.5e-05
+    learning_rate: 1.5e-04
     beta1: 0.6
     beta2: 0.95
     kl_loss_factor: 1.0

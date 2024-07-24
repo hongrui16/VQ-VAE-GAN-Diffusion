@@ -138,7 +138,7 @@ class VQDiffusionTrainer:
         # self.logger.info(f"Checkpoint saved at {checkpoint_dir}")
 
         # save transformer model only
-        weight_path = os.path.join(checkpoint_dir, 'Diffusion.pt')
+        weight_path = os.path.join(checkpoint_dir, 'diffusion.pt')
         if os.path.exists(weight_path):
             os.remove(weight_path)
         torch.save(self.vqdiffusion.diffusion.state_dict(), weight_path)
