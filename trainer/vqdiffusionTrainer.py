@@ -112,7 +112,7 @@ class VQDiffusionTrainer:
                 break
             
     
-    def generate_images(self, n_images: int = 5, epoch = -1):
+    def generate_images(self, n_images: int = 4, epoch = -1):
 
         self.logger.info(f"{self.model_name} Transformer Generating {n_images} images...")
         
@@ -121,12 +121,7 @@ class VQDiffusionTrainer:
         self.vqdiffusion = self.vqdiffusion.to(self.device)
         with torch.no_grad():
             for i in range(n_images):
-                start_indices = torch.zeros((4, 0)).long().to(self.device)
-                sos_tokens = torch.ones(start_indices.shape[0], 1) * 0
-                sos_tokens = sos_tokens.long().to(self.device)
-                sample_indices = self.vqdiffusion.sample(
-                    start_indices, sos_tokens, steps=256
-                )
+                sample_indices = self.vqdiffusion.sample(n_images)
                 sampled_imgs = self.vqdiffusion.z_to_image(sample_indices)
                 torchvision.utils.save_image(
                     sampled_imgs,

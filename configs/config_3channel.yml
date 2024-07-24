@@ -32,7 +32,7 @@ architecture:
     diffusion_steps: 100
     sampling_steps: 100
     noise_schedule: "linear"
-    diffusion_type: 'VQ_Official' #'VQ_Official', 'Continuous'
+    diffusion_type: 'Continuous' #'VQ_Official', 'Continuous'
     objective: 'pred_noise'
     resume_path: None
     train_diffusion: True

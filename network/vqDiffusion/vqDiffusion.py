@@ -29,6 +29,7 @@ class VQDiffusion(nn.Module):
         sampling_timesteps = config['architecture']['diffusion']['sampling_steps']
         objective = config['architecture']['diffusion']['objective']
         seq_length = config['architecture']['vqvae']['latent_channels']
+        codebook_size = config['architecture']['vqvae']['num_codebook_vectors']
 
         assert diffusion_type in ['VQ_Official', 'Continuous'], "Diffusion type should be either 'VQ_Official' or 'Continuous'"
 
@@ -36,29 +37,37 @@ class VQDiffusion(nn.Module):
         self.vqvae = vqvae
         self.logger = logger
 
-        vocab_size = vqvae.num_codebook_vectors
+        distribute_dim = 1 # -1 or 1
 
         if diffusion_type == 'VQ_Official':
-            unet_out_dim = vocab_size - 1
+            unet_channels = codebook_size
+            unet_out_dim = codebook_size - 1
         else:
-            unet_out_dim = vocab_size
+            if distribute_dim == 1:
+                unet_channels = codebook_size
+                unet_out_dim = codebook_size
+            else:
+                unet_channels = seq_length
+                unet_out_dim = seq_length
             
-
+        
         self.unet = Unet2D(
-                dim = 64,
-                dim_mults = (1, 2, 4, 8),
-                channels = vocab_size,
-                out_dim= unet_out_dim)
+                            dim = 64,
+                            dim_mults = (1, 2, 4, 8),
+                            channels = unet_channels,
+                            out_dim= unet_out_dim
+                            )
+
         
         if diffusion_type == 'VQ_Official':
             self.diffusion = Diffusion_VQ_Official(
                                             self.unet, diffusion_step = time_steps, 
-                                            vocab_size = vocab_size,
+                                            vocab_size = codebook_size,
                                             seq_len = seq_length, device = device,)
         else:                
             self.diffusion = GaussianDiffusion2D(self.unet,  seq_length = seq_length,
-                                            timesteps = time_steps, sampling_timesteps = sampling_timesteps,
-                                            objective = objective
+                                            timesteps = time_steps, sampling_timesteps = sampling_timesteps,vocab_size = codebook_size,
+                                            distribute_dim = distribute_dim
                                             )
 
         
@@ -124,7 +133,7 @@ class VQDiffusion(nn.Module):
 
         # Getting the codebook indices of the image
         _, indices = self.encode_to_z(x)
-        print('indices', indices.shape)
+        # print('indices', indices.shape)
         out = self.diffusion(indices)
         loss = out['loss']
         return loss
@@ -132,27 +141,17 @@ class VQDiffusion(nn.Module):
     @torch.no_grad()
     def sample(
         self,
-        x: torch.Tensor,
-        c: torch.Tensor,
-        steps: int = 256,
         batch_size: int = 1,
-
     ) -> torch.Tensor:
         """Generating sample indices from the transformer
 
         Args:
             x (torch.Tensor): the batch of images
-            c (torch.Tensor): sos token 
-            steps (int, optional): the lenght of indices to generate. Defaults to 256.
-            temperature (float, optional): hyperparameter for minGPT model. Defaults to 1.0.
-            top_k (int, optional): keeping top k entries. Defaults to 100.
 
         Returns:
             torch.Tensor: _description_
         """
         self.diffusion.eval()
-
-        batch_size = x.shape[0]
         if batch_size > 5:
             batch_size = 5
         sampling_indices = self.diffusion.sample(batch_size=batch_size)
