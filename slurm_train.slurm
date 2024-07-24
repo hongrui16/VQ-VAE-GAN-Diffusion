@@ -27,6 +27,10 @@ cd /home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan
 # python train.py --dataset_name Oxford102Flower --batch_size 24 --num_epochs 50 --config_path configs/config_3channel.yml --model_name vqvae --resume_ckpt_dir log/Oxford102Flower/vqvae/run_2024-07-15-14-47-33
 # python train.py --dataset_name Oxford102Flower --batch_size 24 --num_epochs 50 --config_path configs/config_3channel.yml --model_name vqgan --resume_ckpt_dir log/Oxford102Flower/vqgan/run_2024-07-15-14-51-46
 
-python train.py --dataset_name InterHand26M --batch_size 24 --num_epochs 50 --config_path configs/config_3channel.yml --model_name vqvae --no_train_transformer
+python train.py --dataset_name InterHand26M --batch_size 20 --num_epochs 50 --config_path configs/config_3channel.yml --model_name vqvae --no_train_transformer
 
 # salloc -p contrib-gpuq -q gpu --nodes=1 --ntasks-per-node=15 --gres=gpu:3g.40gb:1 --mem=50gb -t 0-24:00:00
+
+
+# cd /home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/dataloader
+# python InterHand26M_loader.py

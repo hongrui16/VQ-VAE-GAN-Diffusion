@@ -13,40 +13,40 @@ import torch.nn.functional as F
 import torchvision
 from aim import Image, Run
 import time
+import tqdm
 
 from utils.utils import weights_init
 from utils.utils import print_gpu_memory_usage, denormalize
 from network.vqgan.discriminator import Discriminator
 
 
-class VQGANTrainer:
+class VQGANVQVAETrainer:
     """Trainer class for VQGAN, contains step, train methods"""
 
     def __init__(
         self,
         model: torch.nn.Module,
         run: Run,
-        # Training parameters
         device: str or torch.device = "cuda",
-        learning_rate: float = 2.25e-05,
-        beta1: float = 0.5,
-        beta2: float = 0.9,
-        # Loss parameters
-        perceptual_loss_factor: float = 1.0,
-        rec_loss_factor: float = 1.0,
-        # Discriminator parameters
-        disc_factor: float = 1.0,
-        disc_start: int = 100,
-        # Miscellaneous parameters
         experiment_dir: str = "./experiments",
-        perceptual_model: str = "vgg",
         logger = None,
-        model_name = None,
         train_dataset = None,
         save_img_dir = None,
         args = None,
         val_dataloader = None,
+        config = None,
     ):
+        model_name = config['architecture']['model_name']
+        
+        learning_rate = config['trainer']['vqvae']['learning_rate']
+        beta1 = config['trainer']['vqvae']['beta1']
+        beta2 = config['trainer']['vqvae']['beta2']        
+        perceptual_loss_factor = config['trainer']['vqvae']['perceptual_loss_factor']
+        rec_loss_factor = config['trainer']['vqvae']['rec_loss_factor']
+        perceptual_model = config['trainer']['vqvae']['perceptual_model']
+
+        disc_factor = config['trainer']['descriminator']['disc_factor']
+        disc_start = config['trainer']['descriminator']['disc_start']
 
         self.run = run
         self.device = device
@@ -64,24 +64,19 @@ class VQGANTrainer:
             self.save_every = num_training_samples // save_max_sample
         
         # VQGAN parameters
-        self.vqgan = model
-        if not args.resume_ckpt_dir is None:
-            weight_path = os.path.join(args.resume_ckpt_dir, f"{model_name}.pt")
-            if os.path.exists(weight_path):
-                self.vqgan.load_state_dict(torch.load(weight_path))
-                self.logger.info(f"{model_name} loaded from {args.resume_ckpt_dir}")
+        self.vqvae = model
             
-        self.vqgan.to(self.device)
-        if model_name == "vqgan":
+        self.vqvae.to(self.device)
+        if "vqgan" in model_name.lower():
             # Discriminator parameters
-            self.discriminator = Discriminator(image_channels=self.vqgan.img_channels).to(self.device)
+            self.discriminator = Discriminator(image_channels=self.vqvae.img_channels).to(self.device)
             self.discriminator.apply(weights_init)
-
-            if not args.resume_ckpt_dir is None:
-                weight_path = os.path.join(args.resume_ckpt_dir, "discriminator.pt")
-                if os.path.exists(weight_path):
-                    self.discriminator.load_state_dict(torch.load(weight_path))
-                    self.logger.info(f"Discriminator loaded from {args.resume_ckpt_dir}")
+            
+            discrimator_weight_path = config['trainer']['descriminator']['resume_path']
+            if not discrimator_weight_path is None:
+                if os.path.exists(discrimator_weight_path):
+                    self.discriminator.load_state_dict(torch.load(discrimator_weight_path))
+                    self.logger.info(f"Discriminator loaded from {discrimator_weight_path}")
 
         # Loss parameters
         self.perceptual_loss = lpips.LPIPS(net=perceptual_model).to(self.device)
@@ -109,17 +104,17 @@ class VQGANTrainer:
     def configure_optimizers(
         self, learning_rate: float = 2.25e-05, beta1: float = 0.5, beta2: float = 0.9
     ):
-        opt_vqgan = torch.optim.Adam(
-            list(self.vqgan.encoder.parameters())
-            + list(self.vqgan.decoder.parameters())
-            + list(self.vqgan.codebook.parameters())
-            + list(self.vqgan.quant_conv.parameters())
-            + list(self.vqgan.post_quant_conv.parameters()),
+        opt_vqvae = torch.optim.Adam(
+            list(self.vqvae.encoder.parameters())
+            + list(self.vqvae.decoder.parameters())
+            + list(self.vqvae.codebook.parameters())
+            + list(self.vqvae.quant_conv.parameters())
+            + list(self.vqvae.post_quant_conv.parameters()),
             lr=learning_rate,
             eps=1e-08,
             betas=(beta1, beta2),
         )
-        if self.model_name == "vqgan":
+        if "vqgan" in self.model_name:
             opt_disc = torch.optim.Adam(
                 self.discriminator.parameters(),
                 lr=learning_rate,
@@ -129,7 +124,7 @@ class VQGANTrainer:
         else:
             opt_disc = None
 
-        return opt_vqgan, opt_disc
+        return opt_vqvae, opt_disc
 
     def step(self, imgs: torch.Tensor) -> torch.Tensor:
         """Performs a single training step from the dataloader images batch
@@ -148,7 +143,7 @@ class VQGANTrainer:
 
 
         # Getting decoder output
-        decoded_images, _, q_loss = self.vqgan(imgs)
+        decoded_images, _, q_loss = self.vqvae(imgs)
 
         """
         =======================================================================================================================
@@ -170,13 +165,13 @@ class VQGANTrainer:
             disc_real = self.discriminator(imgs)
             disc_fake = self.discriminator(decoded_images)
 
-            disc_factor = self.vqgan.adopt_weight(
+            disc_factor = self.vqvae.adopt_weight(
                 self.disc_factor, self.global_step, threshold=self.disc_start
             )
 
             g_loss = -torch.mean(disc_fake)
 
-            λ = self.vqgan.calculate_lambda(perceptual_rec_loss, g_loss)
+            λ = self.vqvae.calculate_lambda(perceptual_rec_loss, g_loss)
             vq_loss = perceptual_rec_loss + q_loss + disc_factor * λ * g_loss
 
             d_loss_real = torch.mean(F.relu(1.0 - disc_real))
@@ -238,13 +233,13 @@ class VQGANTrainer:
             epochs (int, optional): number of epochs to train for. Defaults to 100.
         """
         
-        self.vqgan.train()
+        self.vqvae.train()
         if self.model_name == "vqgan":
             self.discriminator.train()
         for epoch in range(epochs):
             start_time = time.time()
-            for index, imgs in enumerate(dataloader):
-
+            tqdm_bar = tqdm.tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
+            for index, imgs in enumerate(tqdm_bar):
                 # Training step
                 imgs = imgs.to(self.device)
                 # print('imgs', imgs.shape)
@@ -253,16 +248,14 @@ class VQGANTrainer:
                 # Updating global step
                 self.global_step += 1
 
+
                 if index % self.save_every == 0:
                     if self.model_name == "vqgan":
-                        self.logger.info(
-                            f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | VQ Loss : {vq_loss:.4f} | Discriminator Loss: {gan_loss:.4f}"
-                        )
+                        loginfo = f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | VQ Loss : {vq_loss:.4f} | Discriminator Loss: {gan_loss:.4f}"
                     else:
-                        self.logger.info(
-                            f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | VQ Loss : {vq_loss:.4f}"
-                        )
-                    
+                        loginfo =f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | VQ Loss : {vq_loss:.4f}"
+                    # Log the information
+                    self.logger.info(loginfo)
 
                     # Only saving the gif for the first 2000 save steps
                     if self.global_step // self.save_every <= 2000:
@@ -281,7 +274,7 @@ class VQGANTrainer:
                                     torch.cat(
                                         (
                                             self.sample_batch,
-                                            self.vqgan(self.sample_batch)[0],
+                                            self.vqvae(self.sample_batch)[0],
                                         ),
                                     )
                                 )
@@ -326,7 +319,7 @@ class VQGANTrainer:
                 print_gpu_memory_usage(self.logger)
             self.save_checkpoint(self.expriment_save_dir)    
 
-            self.vqgan_generate_images(n_images=6, epoch=epoch)
+            self.generate_images(n_images=6, epoch=epoch)
 
 
             torch.cuda.empty_cache()
@@ -337,13 +330,13 @@ class VQGANTrainer:
             if self.args.debug:
                 break
     
-    def vqgan_generate_images(self, n_images: int = 6, dataloader: torch.utils.data.DataLoader = None, 
+    def generate_images(self, n_images: int = 6, dataloader: torch.utils.data.DataLoader = None, 
                                epoch = -1):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
 
-        self.vqgan.eval()
-        self.vqgan.to(self.device)
+        self.vqvae.eval()
+        self.vqvae.to(self.device)
 
         mean = [0.485, 0.456, 0.406]
         std = [0.229, 0.224, 0.225]
@@ -357,8 +350,9 @@ class VQGANTrainer:
 
                 input_image = input_image.to(self.device)
                 # print('input_image', input_image.shape)
-                generated_imgs, codebook_indices, codebook_loss = self.vqgan(input_image)
-                input_image = denormalize(input_image, mean, std)
+                generated_imgs, codebook_indices, codebook_loss = self.vqvae(input_image)
+                if input_image.shape[1] == 3: # RGB image
+                    input_image = denormalize(input_image, mean, std)
 
                 # 确保所有图像在 [0, 1] 范围内
                 input_image = input_image.clamp(0, 1)
@@ -375,14 +369,14 @@ class VQGANTrainer:
         
 
     def save_checkpoint(self, checkpoint_dir: str):
-        """Saves the vqgan model checkpoints"""
-        filepath = os.path.join(checkpoint_dir, f"{self.model_name}.pt")
+        """Saves the vqvae model checkpoints"""
+        filepath = os.path.join(checkpoint_dir, "vqvae.pt")
         if os.path.exists(filepath):
             os.remove(filepath)
-        torch.save(self.vqgan.state_dict(), filepath)
+        torch.save(self.vqvae.state_dict(), filepath)
 
 
-        if self.model_name == "vqgan":
+        if 'vqgan' in self.model_name.lower():
             filepath = os.path.join(checkpoint_dir, "discriminator.pt")
             torch.save(
                 self.discriminator.state_dict(), filepath)

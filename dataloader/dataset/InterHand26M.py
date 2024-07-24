@@ -85,32 +85,52 @@ class InterHand26M(torch.utils.data.Dataset):
         data = self.datalist[idx]
         img_path = data['img_path']
         img_name = data['img_name']
+        # if not osp.exists(img_path):
+        #     self.logger.info(f'Error: {img_path} not found')
+        #     idx = random.randint(0, len(self.datalist))
+        #     return self.__getitem__(idx)
+        
         img = cv2.imread(img_path)
+        # if not isinstance(img, np.ndarray):
+        #     self.logger.info(f'Error: {img_path} is not a valid image')
+        #     idx = random.randint(0, len(self.datalist))
+        #     return self.__getitem__(idx)
+        
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        hand_bbox = data['hand_bbox']
-        hand_bbox = np.array(hand_bbox, dtype=np.int32)
-        ### crop hand based on hand_bbox
-        x1, y1, x2, y2 = hand_bbox
-        hand_img = img[y1:y2, x1:x2, :]
+
+        try:
+            hand_bbox_list = data['hand_bbox']
+            hand_bbox = np.array(hand_bbox_list, dtype=np.int32)
+            ### crop hand based on hand_bbox
+            x1, y1, x2, y2 = hand_bbox
+            hand_img = img[y1:y2, x1:x2, :]
+        except:
+            self.logger.info(f'Error: {img_path}, hand_bbox is not valid')
+            self.logger.info(f'hand_bbox: {hand_bbox_list}')
+            idx = random.randint(0, len(self.datalist))
+            return self.__getitem__(idx)
         
         ## pad to square
         h, w = hand_img.shape[:2]
         max_size = max(h, w)
         hand_img = cv2.copyMakeBorder(hand_img, 0, max_size - h, 0, max_size - w, cv2.BORDER_CONSTANT, value=(0, 0, 0))
-        try:
-            if isinstance(hand_img, np.ndarray):
-                hand_img = Image.fromarray(hand_img)
-        except:
+        if not isinstance(hand_img, np.ndarray):
+            self.logger.info(f'Error: {img_path}, not a valid ndarray image')
+            idx = random.randint(0, len(self.datalist))
+            return self.__getitem__(idx)
+
+        hand_img = Image.fromarray(hand_img)        
+        if not isinstance(hand_img, Image.Image):
             self.logger.info(f'Error: {img_path}')
             idx = random.randint(0, len(self.datalist))
             return self.__getitem__(idx)
         
         if self.transform:
             hand_img = self.transform(hand_img)
-        hand_data = {
-            'img': hand_img,
-            'img_name': img_name
-        }
+        # hand_data = {
+        #     'img': hand_img,
+        #     'img_name': img_name
+        # }
         # return hand_data
         return hand_img
         

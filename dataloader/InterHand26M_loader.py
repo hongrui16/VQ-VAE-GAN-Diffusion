@@ -93,9 +93,9 @@ if __name__ == '__main__':
     logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(log_path), logging.StreamHandler()])
     logger = logging.getLogger(f'InterHand26M-LOG')
     
-    batch_size = 300
+    batch_size = 500
 
-    dataloader, dataset = load_InterHand26M(batch_size = batch_size, image_size=20, num_workers = 6, split= 'train', logger=logger)
+    dataloader, dataset = load_InterHand26M(batch_size = batch_size, image_size=20, num_workers = 10, split= 'train', logger=logger)
     num_batches = len(dataset)//batch_size
     for i, data in enumerate(dataloader):
         print(f'{i}/{num_batches}, {data.shape}')

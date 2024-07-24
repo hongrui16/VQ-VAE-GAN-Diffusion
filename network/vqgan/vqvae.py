@@ -1,5 +1,4 @@
 """
-https://github.com/dome272/VQGAN-pytorch/blob/main/vqgan.py
 
 Implementing the main VQGAN, containing forward pass, lambda calculation, and to "enable" discriminator loss after a certain number of global steps.
 """
@@ -7,13 +6,13 @@ Implementing the main VQGAN, containing forward pass, lambda calculation, and to
 # Importing Libraries
 import torch
 import torch.nn as nn
-
+import os, sys
 from network.vqgan.encoder import Encoder
 from network.vqgan.decoder import Decoder
 from network.vqgan.codebook import CodeBook
 
 
-class VQGAN(nn.Module):
+class VQVAE(nn.Module):
     """
     VQGAN class
 
@@ -32,20 +31,22 @@ class VQGAN(nn.Module):
 
     def __init__(
         self,
-        img_channels: int = 3,
-        img_size: int = 256,
-        latent_channels: int = 256,
-        latent_size: int = 16,
-        intermediate_channels: list = [128, 128, 256, 256, 512],
-        num_residual_blocks_encoder: int = 2,
-        num_residual_blocks_decoder: int = 3,
-        dropout: float = 0.0,
-        attention_resolution: list = [16],
-        num_codebook_vectors: int = 1024,
+        logger = None,
+        config = None,
     ):
-
         super().__init__()
-        
+
+        img_channels = config["architecture"]["vqvae"]["img_channels"]
+        img_size = config["architecture"]["vqvae"]["img_size"]
+        latent_channels = config["architecture"]["vqvae"]["latent_channels"]
+        latent_size = config["architecture"]["vqvae"]["latent_size"]
+        intermediate_channels = config["architecture"]["vqvae"]["intermediate_channels"]
+        num_residual_blocks_encoder = config["architecture"]["vqvae"]["num_residual_blocks_encoder"]
+        num_residual_blocks_decoder = config["architecture"]["vqvae"]["num_residual_blocks_decoder"]
+        dropout = config["architecture"]["vqvae"]["dropout"]
+        attention_resolution = config["architecture"]["vqvae"]["attention_resolution"]
+        num_codebook_vectors = config["architecture"]["vqvae"]["num_codebook_vectors"]
+
         self.img_channels = img_channels
         self.num_codebook_vectors = num_codebook_vectors
 
@@ -75,6 +76,28 @@ class VQGAN(nn.Module):
         self.quant_conv = nn.Conv2d(latent_channels, latent_channels, 1)
         self.post_quant_conv = nn.Conv2d(latent_channels, latent_channels, 1)
 
+        
+        vqvae_resume_path = config["architecture"]["vqvae"]["resume_path"]
+        if not vqvae_resume_path is None:
+            if os.path.exists(vqvae_resume_path):
+                self.load_checkpoint(vqvae_resume_path)
+                logger.info(f"VQVAE loaded from {vqvae_resume_path}")
+
+        train_vqvae = config['architecture']['vqvae']['train_vqvae']
+        if not train_vqvae:
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+            for param in self.decoder.parameters():
+                param.requires_grad = False
+            for param in self.codebook.parameters():
+                param.requires_grad = False
+            for param in self.quant_conv.parameters():
+                param.requires_grad = False
+            for param in self.post_quant_conv.parameters():
+                param.requires_grad = False
+            logger.info(f"VAE model is freezed")
+
+
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Performs a single step of training on the input tensor x
 
@@ -86,11 +109,14 @@ class VQGAN(nn.Module):
         """
 
         encoded_images = self.encoder(x)
+        # print('encoded_images:', encoded_images.shape) #torch.Size([bs, 256, 16, 16])
         quant_x = self.quant_conv(encoded_images)
+        # print('quant_x:', quant_x.shape) # torch.Size([bs, 256, 16, 16])
 
         codebook_mapping, codebook_indices, codebook_loss = self.codebook(quant_x)
 
         post_quant_x = self.post_quant_conv(codebook_mapping)
+        # print('post_quant_x:', post_quant_x.shape) # post_quant_x: torch.Size([bs, 256, 16, 16])
         decoded_images = self.decoder(post_quant_x)
 
         return decoded_images, codebook_indices, codebook_loss
