@@ -48,6 +48,11 @@ class VQGANVQVAETrainer:
         disc_factor = config['trainer']['descriminator']['disc_factor']
         disc_start = config['trainer']['descriminator']['disc_start']
 
+        self.mean = config['dataset']['mean']
+        self.std = config['dataset']['std']
+        self.get_hand_mask = config['dataset']['get_hand_mask'] ### only for InterHand26M dataset
+        self.dataset_name = config['dataset']['dataset_name']
+
         self.run = run
         self.device = device
         self.logger = logger
@@ -55,6 +60,9 @@ class VQGANVQVAETrainer:
         self.save_img_dir = save_img_dir
         self.args = args
         self.val_dataloader = val_dataloader
+
+
+
 
         num_training_samples = len(train_dataset)
         save_max_sample = 50
@@ -126,7 +134,7 @@ class VQGANVQVAETrainer:
 
         return opt_vqvae, opt_disc
 
-    def step(self, imgs: torch.Tensor) -> torch.Tensor:
+    def step(self, imgs: torch.Tensor, masks:torch.Tensor = None) -> torch.Tensor:
         """Performs a single training step from the dataloader images batch
 
         For the VQGAN, it calculates the perceptual loss, reconstruction loss, and the codebook loss and does the backward pass.
@@ -135,6 +143,7 @@ class VQGANVQVAETrainer:
 
         Args:
             imgs: input tensor of shape (batch_size, channel, H, W)
+            masks: hand mask tensor of shape (batch_size, H, W), only for InterHand26M dataset
 
         Returns:
             decoded_imgs: output tensor of shape (batch_size, channel, H, W)
@@ -149,12 +158,17 @@ class VQGANVQVAETrainer:
         =======================================================================================================================
         VQ Loss
         """
-        perceptual_loss = self.perceptual_loss(imgs, decoded_images)
+        perceptual_loss = self.perceptual_loss(imgs, decoded_images)            
         rec_loss = torch.abs(imgs - decoded_images)
         perceptual_rec_loss = (
             self.perceptual_loss_factor * perceptual_loss
             + self.rec_loss_factor * rec_loss
         )
+        # print('perceptual_rec_loss', perceptual_rec_loss.shape) #torch.Size([bs, 3, 256, 256])
+        if masks is not None:
+            # print('masks', masks.shape) ## torch.Size([bs, 256, 256])
+            masks = masks.unsqueeze(1)
+            perceptual_rec_loss = perceptual_rec_loss * masks
         perceptual_rec_loss = perceptual_rec_loss.mean()
 
         if self.model_name == "vqgan":
@@ -242,8 +256,14 @@ class VQGANVQVAETrainer:
             for index, imgs in enumerate(tqdm_bar):
                 # Training step
                 imgs = imgs.to(self.device)
+                if self.get_hand_mask and self.dataset_name == 'InterHand26M':
+                    images = denormalize(imgs, self.mean, self.std)
+                    hand_masks = images[:,0]>(18/255) ## 18/255 is the threshold for hand mask
+                else:
+                    hand_masks = None
+
                 # print('imgs', imgs.shape)
-                decoded_images, vq_loss, gan_loss = self.step(imgs)
+                decoded_images, vq_loss, gan_loss = self.step(imgs, hand_masks)
 
                 # Updating global step
                 self.global_step += 1
@@ -338,8 +358,6 @@ class VQGANVQVAETrainer:
         self.vqvae.eval()
         self.vqvae.to(self.device)
 
-        mean = [0.485, 0.456, 0.406]
-        std = [0.229, 0.224, 0.225]
         if dataloader is None:
             dataloader = self.val_dataloader
         
@@ -352,7 +370,7 @@ class VQGANVQVAETrainer:
                 # print('input_image', input_image.shape)
                 generated_imgs, codebook_indices, codebook_loss = self.vqvae(input_image)
                 if input_image.shape[1] == 3: # RGB image
-                    input_image = denormalize(input_image, mean, std)
+                    input_image = denormalize(input_image, self.mean, self.std)
 
                 # 确保所有图像在 [0, 1] 范围内
                 input_image = input_image.clamp(0, 1)

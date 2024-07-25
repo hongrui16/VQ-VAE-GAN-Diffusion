@@ -4,7 +4,7 @@ from torchvision import transforms
 from torch.utils.data import Dataset, DataLoader
 
 class OxfordFlowersDataset(Dataset):
-    def __init__(self, root_dir, split, transform=None, return_annotation=False):
+    def __init__(self, root_dir, split, transform=None, config = None):
         """
         Args:
             root_dir (string): Directory with all the images.
@@ -19,7 +19,8 @@ class OxfordFlowersDataset(Dataset):
         self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(self.classes)}
         self.image_paths = []
         self.labels = []
-        self.return_labels = return_annotation
+
+        self.return_labels = config['dataset']['return_annotations']
 
         for cls_name in self.classes:
             cls_folder = os.path.join(root_dir, cls_name)

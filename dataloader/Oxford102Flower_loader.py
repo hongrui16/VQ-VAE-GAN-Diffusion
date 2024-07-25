@@ -20,7 +20,7 @@ def load_OxfordFlowers(
     save_path: str = None,
     split: str = 'train',
     logger=None,
-    return_annotation=False,
+    config = None,
 ) -> DataLoader:
     """Load the Oxford102Flower data and returns the dataloaders (train ). The data is downloaded if it does not exist.
 
@@ -44,6 +44,10 @@ def load_OxfordFlowers(
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory {data_dir} does not exist.")
     
+    mean = config['dataset']['mean']
+    std = config['dataset']['std']
+
+
     if split == 'train':
         data_transforms = transforms.Compose([    
             transforms.Resize((image_size, image_size)),
@@ -51,17 +55,17 @@ def load_OxfordFlowers(
             transforms.RandomVerticalFlip(p = 0.2),
             transforms.RandomApply([transforms.RandomRotation(25)], p=0.3),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=mean, std=std)
         ])
     else:
         data_transforms = transforms.Compose([    
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=mean, std=std)
         ])
 
 
-    dataset = OxfordFlowersDataset(data_dir, split, transform=data_transforms, return_annotation=return_annotation)
+    dataset = OxfordFlowersDataset(data_dir, split, transform=data_transforms, config=config)
     
     if logger is not None:
         logger.info(f"Number of {split} samples: {len(dataset)}, Number of classes: {len(dataset.classes)}")

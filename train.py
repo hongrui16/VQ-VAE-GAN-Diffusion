@@ -25,12 +25,20 @@ from trainer.vqdiffusionTrainer import VQDiffusionTrainer
 
 
 def main(args, config):
+    if args.debug:
+        config['dataset']["batch_size"] = 1
+        train_split = 'val'
+    else:
+        train_split = 'train'
 
     model_name = config['architecture']["model_name"]
     log_dir = config['trainer']["log_dir"]
-    dataset_name = config['trainer']["dataset_name"]
     num_epochs = config['trainer']["num_epochs"]
-    batch_size = config['trainer']["batch_size"] if not args.debug else 2
+
+
+    batch_size = config['dataset']["batch_size"] 
+    dataset_name = config['dataset']["dataset_name"]
+    num_workers = config['dataset']["num_workers"]
 
     current_timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
@@ -80,8 +88,12 @@ def main(args, config):
                                     logger=logger, config = config)
         logging.info(f"{model_name} Diffusion models created")
 
-    train_dataloader, train_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, split='train', logger=logger)
-    val_dataloader, val_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, split='val', logger=logger)
+    train_dataloader, train_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, 
+                                                      num_workers = num_workers, split=train_split, 
+                                                      logger=logger, config = config)
+    val_dataloader, val_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, 
+                                                  num_workers = num_workers, split='val', 
+                                                    logger=logger, config = config)    
     logging.info(f"Data loaded")
 
     run = Run(experiment=dataset_name)

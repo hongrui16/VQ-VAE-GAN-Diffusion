@@ -27,14 +27,15 @@ class VQTransformer(nn.Module):
         n_head = config['architecture']['transformer']['n_head']
         n_embd = config['architecture']['transformer']['n_embd']
         pkeep = config['architecture']['transformer']['pkeep']
-
+        vocab_size = config['architecture']['vqvae']['num_codebook_vectors']
+        
         self.sos_token = sos_token
         self.device = device
         self.vqvae = vqvae
         self.logger = logger
 
         self.transformer = GPT(
-            vocab_size=self.vqvae.num_codebook_vectors,
+            vocab_size=vocab_size,
             block_size=block_size,
             n_layer=n_layer,
             n_head=n_head,
@@ -49,8 +50,8 @@ class VQTransformer(nn.Module):
                 self.transformer.load_state_dict(torch.load(transformer_resume_path))
                 self.logger.info(f"Transformer loaded weight from {transformer_resume_path}")
         
-        train_transformer = config['architecture']['transformer']['train_transformer']
-        if not train_transformer:
+        freeze_weights = config['architecture']['transformer']['freeze_weights']
+        if not freeze_weights:
             for param in self.transformer.parameters():
                 param.requires_grad = False
             logger.info(f"Transformer model is freezed")

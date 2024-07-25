@@ -14,7 +14,8 @@ import random
 from glob import glob
 from pycocotools.coco import COCO
 from PIL import Image
-
+from rembg import remove
+import time
 from torch.utils.data import DataLoader
 import torchvision
 
@@ -25,7 +26,7 @@ import os, sys
 
 
 class InterHand26M(torch.utils.data.Dataset):
-    def __init__(self, root_dir, split, transform = None, return_annotation=False, logger=None):
+    def __init__(self, root_dir, split, transform = None, logger=None, config = None):
         assert split in ['train', 'val', 'test'] # data_split: train, val, test
         self.transform = transform
         self.data_split = split
@@ -35,6 +36,13 @@ class InterHand26M(torch.utils.data.Dataset):
         self.root_dir = root_dir
         self.img_path = osp.join(root_dir, 'images')
         self.annot_path = osp.join(root_dir, 'annotations')
+
+        self.get_hand_mask = config['dataset']['get_hand_mask'] if not config is None else False
+        self.return_annotations = config['dataset']['return_annotations'] if not config is None else False
+
+        # if self.get_hand_mask:
+        #     dilation_size = 10
+        #     self.dilation_kernel = np.ones((dilation_size, dilation_size), np.uint8)
 
         # # IH26M joint set
         # self.joint_set = {
@@ -110,23 +118,47 @@ class InterHand26M(torch.utils.data.Dataset):
             idx = random.randint(0, len(self.datalist))
             return self.__getitem__(idx)
         
+        if self.get_hand_mask:
+            # start_time = time.time()
+            # output = remove(hand_img) ### time-consuming, 
+            # hand_mask = output[:, :, 3].copy()
+            # hand_mask[hand_mask>0] = 1
+            # hand_mask = cv2.dilate(hand_mask, self.dilation_kernel, iterations=1)
+            # print('mask time:', hand_img.shape, time.time() - start_time) # (154, 140, 3) 17.662569761276245
+            pass
+
         ## pad to square
         h, w = hand_img.shape[:2]
         max_size = max(h, w)
         hand_img = cv2.copyMakeBorder(hand_img, 0, max_size - h, 0, max_size - w, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+        # if self.get_hand_mask:
+        #     hand_mask = cv2.copyMakeBorder(hand_mask, 0, max_size - h, 0, max_size - w, cv2.BORDER_CONSTANT, value=(0))
+
         if not isinstance(hand_img, np.ndarray):
             self.logger.info(f'Error: {img_path}, not a valid ndarray image')
             idx = random.randint(0, len(self.datalist))
             return self.__getitem__(idx)
 
+
+            
         hand_img = Image.fromarray(hand_img)        
         if not isinstance(hand_img, Image.Image):
             self.logger.info(f'Error: {img_path}')
             idx = random.randint(0, len(self.datalist))
             return self.__getitem__(idx)
         
+        h, w = hand_img.size
+
         if self.transform:
             hand_img = self.transform(hand_img)
+            h, w = hand_img.size(1), hand_img.size(2)
+
+        
+        # if self.get_hand_mask:
+        #     hand_mask = cv2.resize(hand_mask, (w, h), interpolation=cv2.INTER_NEAREST)
+        #     hand_mask = torch.from_numpy(hand_mask).unsqueeze(0).float()
+        #     hand_img = torch.cat([hand_img, hand_mask], dim=0)
+
         # hand_data = {
         #     'img': hand_img,
         #     'img_name': img_name
@@ -154,27 +186,32 @@ if __name__ == '__main__':
         transforms.Resize((256, 256)),
         transforms.RandomHorizontalFlip(p = 0.2),
         transforms.RandomVerticalFlip(p = 0.2),
-        transforms.RandomRotation(20),
+        # transforms.RandomRotation(20),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
 
-    dataset = InterHand26M('val', root_dir=data_dir, transform=trans, logger=logger)
+    dataset = InterHand26M(root_dir=data_dir, split= 'val', transform=trans, logger=logger)
 
 
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=1)
 
-    for i, data in enumerate(tqdm(dataloader)):
-        img = data['img']
-        img_name = data['img_name'][0]
-        img = img.squeeze().permute(1, 2, 0).numpy()
+    for i, img in enumerate(tqdm(dataloader)):
+        # print('img:', img.shape)
+        img = img.squeeze().permute(1, 2, 0).numpy()        
         img = img * np.array([0.229, 0.224, 0.225]) + np.array([0.485, 0.456, 0.406])
         img = np.clip(img, 0, 1)
         img = (img * 255).astype(np.uint8)
-        cv2.imwrite(f'./2_{img_name}', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        mask = img_gray > 20
+        mask = mask.astype(np.uint8) * 255
+        mask = cv2.merge([mask, mask, mask])
+        img = np.concatenate([img, mask], axis=1)
+        # print('img:', img.shape)
+        cv2.imwrite(f'./2_{i}.jpg', cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
 
-        if i > 1:
+        if i > 20:
             break
 
     print('done')

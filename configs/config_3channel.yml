@@ -1,5 +1,5 @@
 architecture:
-  model_name: "vqdiffusion" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion
+  model_name: "vqvae" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion
   vqvae:
     img_channels: 3 # 1, 3
     img_size: 256
@@ -11,10 +11,9 @@ architecture:
     dropout: 0.0
     attention_resolution: [16]
     num_codebook_vectors: 1024
-    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
-    train_vqvae: False # True, False
-
-
+    resume_path: None # '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
+    train_vqvae: True # True, False
+    freeze_weights: True # True, False
 
   transformer:
     sos_token: 0
@@ -25,8 +24,7 @@ architecture:
     n_embd: 1024
     resume_path: None
     train_transformer: True
-
-
+    freeze_weights: False
   
   diffusion:
     diffusion_steps: 100
@@ -35,17 +33,24 @@ architecture:
     diffusion_type: 'VQ_Official' #'VQ_Official', 'Continuous'
     objective: 'pred_noise'
     resume_path: None
-    train_diffusion: True
+    train_diffusion: False
+    freeze_weights: False
 
 
-trainer:
-  batch_size: 50
+dataset:
+  mean: [0.485, 0.456, 0.406]
+  std: [0.229, 0.224, 0.225]
+  batch_size: 20 # 20 for VAE, 100 for diffusion Unet2D,
   num_workers: 5
-  num_epochs: 60
-  log_dir: "log"
-  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
+  dataset_name: 'InterHand26M' # mnist, cifar10, InterHand26M, Oxford102Flower
+  get_hand_mask: True ### only for InterHand26M
+  return_annotations: False
   
 
+trainer:  
+  num_epochs: 60
+  log_dir: "log"
+  
   vqvae:
     learning_rate: 2.25e-05
     beta1: 0.5
@@ -70,3 +75,4 @@ trainer:
     beta2: 0.95
     kl_loss_factor: 1.0
     rec_loss_factor: 1.0
+

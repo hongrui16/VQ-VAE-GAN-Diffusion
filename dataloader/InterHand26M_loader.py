@@ -27,7 +27,8 @@ def load_InterHand26M(
     save_path: str = None,
     split: str = 'train',
     logger=None,
-    return_annotation=False,
+    shuffle: bool = False,
+    config = None,
 ) -> DataLoader:
     """Load the InterHand26M data and returns the dataloaders (train ). The data is downloaded if it does not exist.
 
@@ -49,6 +50,10 @@ def load_InterHand26M(
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory {data_dir} does not exist.")
 
+    mean = config['dataset']['mean']
+    std = config['dataset']['std']
+
+
     if split == 'train':
         data_transforms = transforms.Compose([    
             transforms.Resize((image_size, image_size)),
@@ -56,17 +61,17 @@ def load_InterHand26M(
             transforms.RandomVerticalFlip(p = 0.2),
             transforms.RandomApply([transforms.RandomRotation(25)], p=0.3),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=mean, std=std)
         ])
     else:
         data_transforms = transforms.Compose([    
             transforms.Resize((image_size, image_size)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=mean, std=std)
         ])
 
 
-    dataset = InterHand26M(data_dir, split, transform=data_transforms, logger=logger)
+    dataset = InterHand26M(data_dir, split, transform=data_transforms, logger=logger, config=config)
     
     if logger is not None:
         logger.info(f"Number of {split} samples: {len(dataset)}")
@@ -77,7 +82,7 @@ def load_InterHand26M(
         shuffle = True
         drop_last = True
     else:
-        shuffle = False
+        shuffle = False or shuffle
         drop_last = False
     # num_workers = 6
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)

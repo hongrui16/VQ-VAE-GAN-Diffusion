@@ -83,8 +83,8 @@ class VQVAE(nn.Module):
                 self.load_checkpoint(vqvae_resume_path)
                 logger.info(f"VQVAE loaded from {vqvae_resume_path}")
 
-        train_vqvae = config['architecture']['vqvae']['train_vqvae']
-        if not train_vqvae:
+        freeze_weights = config['architecture']['vqvae']['freeze_weights']
+        if not freeze_weights:
             for param in self.encoder.parameters():
                 param.requires_grad = False
             for param in self.decoder.parameters():

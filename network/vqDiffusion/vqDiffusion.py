@@ -77,8 +77,8 @@ class VQDiffusion(nn.Module):
                 self.diffusion.load_state_dict(torch.load(diffusion_resume_path))
                 self.logger.info(f"diffusion loaded weight from {diffusion_resume_path}")
         
-        train_train_diffusion = config['architecture']['diffusion']['train_diffusion']
-        if not train_train_diffusion:
+        freeze_weights = config['architecture']['diffusion']['freeze_weights']
+        if not freeze_weights:
             for param in self.diffusion.parameters():
                 param.requires_grad = False
             logger.info(f"Diffusion model is freezed")

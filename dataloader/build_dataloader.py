@@ -16,6 +16,7 @@ def load_dataloader(
     split: str = 'train',
     logger=None,
     save_path: str = None,
+    config = None,
 ) -> DataLoader:
     """Load the data loader for the given name.
 
@@ -57,6 +58,7 @@ def load_dataloader(
             # save_path=save_path,
             split=split,
             logger=logger,
+            config = config,
         )
     elif name == "Oxford102Flower":
         return load_OxfordFlowers(
@@ -66,4 +68,5 @@ def load_dataloader(
             # save_path=save_path,
             split=split,
             logger=logger,
+            config = config,
         )
