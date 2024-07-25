@@ -59,7 +59,7 @@ def load_InterHand26M(
             transforms.Resize((image_size, image_size)),
             transforms.RandomHorizontalFlip(p = 0.2),
             transforms.RandomVerticalFlip(p = 0.2),
-            transforms.RandomApply([transforms.RandomRotation(25)], p=0.3),
+            # transforms.RandomApply([transforms.RandomRotation(25)], p=0.3),
             transforms.ToTensor(),
             transforms.Normalize(mean=mean, std=std)
         ])

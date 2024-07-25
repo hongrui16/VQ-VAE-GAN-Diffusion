@@ -14,6 +14,7 @@ import torchvision
 from aim import Image, Run
 import time
 import tqdm
+import cv2
 
 from utils.utils import weights_init
 from utils.utils import print_gpu_memory_usage, denormalize
@@ -90,7 +91,7 @@ class VQGANVQVAETrainer:
         self.perceptual_loss = lpips.LPIPS(net=perceptual_model).to(self.device)
 
         # Optimizers
-        self.opt_vqgan, self.opt_disc = self.configure_optimizers(
+        self.opt_vqvae, self.opt_disc = self.configure_optimizers(
             learning_rate=learning_rate, beta1=beta1, beta2=beta2
         )
 
@@ -168,8 +169,11 @@ class VQGANVQVAETrainer:
         if masks is not None:
             # print('masks', masks.shape) ## torch.Size([bs, 256, 256])
             masks = masks.unsqueeze(1)
+            # print('masks', masks.shape)
+            # print('before mask, perceptual_rec_loss', perceptual_rec_loss.mean())
             perceptual_rec_loss = perceptual_rec_loss * masks
         perceptual_rec_loss = perceptual_rec_loss.mean()
+        # print('after mask, perceptual_rec_loss', perceptual_rec_loss.mean())
 
         if self.model_name == "vqgan":
             """
@@ -215,7 +219,7 @@ class VQGANVQVAETrainer:
 
         # =======================================================================================================================
         # Backpropagation
-        self.opt_vqgan.zero_grad()
+        self.opt_vqvae.zero_grad()
         vq_loss.backward(retain_graph=True)  # retain_graph is used to retain the computation graph for the discriminator loss
 
         if self.model_name == "vqgan":                    
@@ -223,7 +227,7 @@ class VQGANVQVAETrainer:
             gan_loss.backward()
             self.opt_disc.step()
 
-        self.opt_vqgan.step()
+        self.opt_vqvae.step()
 
 
         # self.opt_disc.zero_grad()
@@ -258,10 +262,15 @@ class VQGANVQVAETrainer:
                 imgs = imgs.to(self.device)
                 if self.get_hand_mask and self.dataset_name == 'InterHand26M':
                     images = denormalize(imgs, self.mean, self.std)
-                    hand_masks = images[:,0]>(18/255) ## 18/255 is the threshold for hand mask
+                    hand_masks = images[:,0]>(20/255) ## 20/255 is the threshold for hand mask
+                    # img_gray = (images[0,0].detach().cpu().numpy()*255).astype(np.uint8)
+                    # mask = (hand_masks.detach().cpu().numpy()*255).astype(np.uint8).squeeze()
+                    # print('img_gray', img_gray.shape)
+                    # print('mask', mask.shape)
+                    # composed_img = np.concatenate((img_gray, mask), axis=1)
+                    # cv2.imwrite(f'./hand_mask_{index}.jpg', composed_img)
                 else:
                     hand_masks = None
-
                 # print('imgs', imgs.shape)
                 decoded_images, vq_loss, gan_loss = self.step(imgs, hand_masks)
 
