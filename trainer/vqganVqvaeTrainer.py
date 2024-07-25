@@ -15,6 +15,7 @@ from aim import Image, Run
 import time
 import tqdm
 import cv2
+import torchvision.utils as vutils
 
 from utils.utils import weights_init
 from utils.utils import print_gpu_memory_usage, denormalize
@@ -65,12 +66,9 @@ class VQGANVQVAETrainer:
 
 
 
-        num_training_samples = len(train_dataset)
-        save_max_sample = 50
-        if num_training_samples <= save_max_sample:
-            self.save_every = 1
-        else:
-            self.save_every = num_training_samples // save_max_sample
+        num_training_iters = len(train_dataset)//config['dataset']['batch_size']
+        save_max_num_per_epoch = 20
+        self.save_step = min(100, num_training_iters//save_max_num_per_epoch)
         
         # VQGAN parameters
         self.vqvae = model
@@ -274,11 +272,7 @@ class VQGANVQVAETrainer:
                 # print('imgs', imgs.shape)
                 decoded_images, vq_loss, gan_loss = self.step(imgs, hand_masks)
 
-                # Updating global step
-                self.global_step += 1
-
-
-                if index % self.save_every == 0:
+                if self.global_step % self.save_step == 0:
                     if self.model_name == "vqgan":
                         loginfo = f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | VQ Loss : {vq_loss:.4f} | Discriminator Loss: {gan_loss:.4f}"
                     else:
@@ -286,36 +280,33 @@ class VQGANVQVAETrainer:
                     # Log the information
                     self.logger.info(loginfo)
 
-                    # Only saving the gif for the first 2000 save steps
-                    if self.global_step // self.save_every <= 2000:
-                        self.sample_batch = (
-                            imgs[:] if self.sample_batch is None else self.sample_batch
-                        )
-
+                    # Only saving the gif for the first 3000 save steps
+                    if self.global_step // self.save_step <= 3000:
+                        self.sample_batch = imgs[:] if self.sample_batch is None else self.sample_batch
+                        batch_size = self.sample_batch.shape[0] if self.sample_batch.shape[0] < 10 else 10
+                        
                         with torch.no_grad():
                             
                             """
                             Note : Lots of efficiency & cleaning needed here
                             """
 
-                            gif_img = (
-                                torchvision.utils.make_grid(
-                                    torch.cat(
-                                        (
-                                            self.sample_batch,
-                                            self.vqvae(self.sample_batch)[0],
-                                        ),
-                                    )
-                                )
-                                .detach()
-                                .cpu()
-                                .permute(1, 2, 0)
-                                .numpy()
-                            )
+                            
+                            horizontal_combined_1 = torch.cat([self.sample_batch[i] for i in range(batch_size)], dim=2)
+                            new_generated_images, _, _ = self.vqvae(self.sample_batch[:batch_size])
+                            horizontal_combined_2 = torch.cat([new_generated_images[i] for i in range(batch_size)], dim=2)
 
-                            gif_img = (gif_img - gif_img.min()) * (
-                                255 / (gif_img.max() - gif_img.min())
-                            )
+                            # 将这两个横向拼接的结果在高度维度上拼接
+                            vertical_combined = torch.cat((horizontal_combined_1, horizontal_combined_2), dim=1)
+
+                            # 使用 torchvision.utils.make_grid 进行处理
+                            # 因为已经在宽度和高度上拼接了，这里 nrow 设置为 1 即可
+                            gif_img = torchvision.utils.make_grid(vertical_combined.unsqueeze(0), nrow=1)
+
+                            # 转换成 numpy 数组并进行归一化
+                            gif_img = gif_img.detach().cpu().permute(1, 2, 0).numpy()
+                            gif_img = (gif_img - gif_img.min()) * (255 / (gif_img.max() - gif_img.min()))
+
                             gif_img = gif_img.astype(np.uint8)
 
                             self.run.track(
@@ -341,6 +332,10 @@ class VQGANVQVAETrainer:
                             self.gif_images,
                             fps=5,
                         )
+
+                # Updating global step
+                self.global_step += 1
+
                 if self.args.debug:
                     break
 
@@ -348,7 +343,7 @@ class VQGANVQVAETrainer:
                 print_gpu_memory_usage(self.logger)
             self.save_checkpoint(self.expriment_save_dir)    
 
-            self.generate_images(n_images=6, epoch=epoch)
+            self.generate_images(n_images=4, epoch=epoch)
 
 
             torch.cuda.empty_cache()
@@ -359,7 +354,7 @@ class VQGANVQVAETrainer:
             if self.args.debug:
                 break
     
-    def generate_images(self, n_images: int = 6, dataloader: torch.utils.data.DataLoader = None, 
+    def generate_images(self, n_images: int = 5, dataloader: torch.utils.data.DataLoader = None, 
                                epoch = -1):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
@@ -369,27 +364,35 @@ class VQGANVQVAETrainer:
 
         if dataloader is None:
             dataloader = self.val_dataloader
-        
+        max_bs = 5
         with torch.no_grad():
             for i, input_image in enumerate(dataloader):
                 if i >= n_images:
                     break
-
+                bs = input_image.shape[0]
+                if bs > max_bs:
+                    input_image = input_image[:5]
                 input_image = input_image.to(self.device)
                 # print('input_image', input_image.shape)
+                batch_size = input_image.shape[0] if input_image.shape[0] <= max_bs else max_bs
                 generated_imgs, codebook_indices, codebook_loss = self.vqvae(input_image)
-                if input_image.shape[1] == 3: # RGB image
-                    input_image = denormalize(input_image, self.mean, self.std)
+                horizontal_combined_1 = torch.cat([input_image[i] for i in range(batch_size)], dim=2)
+                horizontal_combined_2 = torch.cat([generated_imgs[i] for i in range(batch_size)], dim=2)
 
-                # 确保所有图像在 [0, 1] 范围内
-                input_image = input_image.clamp(0, 1)
-                generated_imgs = generated_imgs.clamp(0, 1)
+                # 将这两个横向拼接的结果在高度维度上拼接
+                vertical_combined = torch.cat((horizontal_combined_1, horizontal_combined_2), dim=1)
+
+                # 使用 torchvision.utils.make_grid 进行处理
+                # 因为已经在宽度和高度上拼接了，这里 nrow 设置为 1 即可
+                gif_img = torchvision.utils.make_grid(vertical_combined.unsqueeze(0), nrow=1)
+
+                # 转换成 numpy 数组并进行归一化
+                gif_img = gif_img.detach()#.cpu().permute(1, 2, 0).numpy()
+                gif_img = (gif_img - gif_img.min()) / (gif_img.max() - gif_img.min())
 
 
-                # 将原图和生成的图像拼接在一起
-                combined_image = torch.cat((input_image, generated_imgs), dim=3)
                 torchvision.utils.save_image(
-                    combined_image,
+                    gif_img,
                     os.path.join(self.save_img_dir, f"{self.model_name}_epoch{epoch:03d}_{i}.jpg"),
                     nrow=1,
                 )

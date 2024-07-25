@@ -29,7 +29,7 @@ def main(args, config):
         config['dataset']["batch_size"] = 1
         train_split = 'val'
     else:
-        train_split = 'train'
+        train_split = config['dataset']["train_split"]
 
     model_name = config['architecture']["model_name"]
     log_dir = config['trainer']["log_dir"]

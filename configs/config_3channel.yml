@@ -43,9 +43,12 @@ dataset:
   batch_size: 20 # 20 for VAE, 100 for diffusion Unet2D,
   num_workers: 5
   dataset_name: 'InterHand26M' # mnist, cifar10, InterHand26M, Oxford102Flower
-  get_hand_mask: True ### only for InterHand26M
+  get_hand_mask: True ### True or False; only for InterHand26M
   return_annotations: False
-  
+  max_train_samples: 'inf'
+  max_val_samples: 'inf'  #600, 'inf'
+  train_split: 'train' # train, val; val for convergence test
+
 
 trainer:  
   num_epochs: 60

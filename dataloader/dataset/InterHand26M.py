@@ -39,7 +39,14 @@ class InterHand26M(torch.utils.data.Dataset):
 
         self.get_hand_mask = config['dataset']['get_hand_mask'] if not config is None else False
         self.return_annotations = config['dataset']['return_annotations'] if not config is None else False
-
+        max_train_samples = float(config['dataset']['max_train_samples'])
+        max_val_samples = float(config['dataset']['max_val_samples'])
+        if split == 'train':
+            self.max_samples = max_train_samples
+        elif split == 'val':
+            self.max_samples = max_val_samples
+        else:
+            self.max_samples = float('inf')
         # if self.get_hand_mask:
         #     dilation_size = 10
         #     self.dilation_kernel = np.ones((dilation_size, dilation_size), np.uint8)
@@ -66,7 +73,9 @@ class InterHand26M(torch.utils.data.Dataset):
         aid_list = list(db.anns.keys())
         
         datalist = []
-        for aid in aid_list:
+        for i, aid in enumerate(aid_list):
+            if i >= self.max_samples:
+                break
             ann = db.anns[aid]
             image_id = ann['image_id']
             bbox = ann['bbox']
@@ -82,7 +91,9 @@ class InterHand26M(torch.utils.data.Dataset):
                 'img_name': img_name,
                 'hand_bbox': bbox.tolist(),
             })
-       
+        
+        del db # release memory
+
         return datalist
     
     def __len__(self):
