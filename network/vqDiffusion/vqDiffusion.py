@@ -8,9 +8,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 
-from network.vqDiffusion.diffusion_vq_official import Diffusion_VQ_Official
-from network.vqDiffusion.diffusion_continuous import GaussianDiffusion2D
-from network.vqDiffusion.unet2d import Unet2D
+from network.vqDiffusion.submodule.diffusion_vq_official import Diffusion_VQ_Official
+from network.vqDiffusion.submodule.diffusion_continuous import GaussianDiffusion2D
+from network.vqDiffusion.submodule.unet2d import Unet2D
 
 
 

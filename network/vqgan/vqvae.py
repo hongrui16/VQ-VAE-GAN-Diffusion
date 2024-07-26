@@ -7,9 +7,9 @@ Implementing the main VQGAN, containing forward pass, lambda calculation, and to
 import torch
 import torch.nn as nn
 import os, sys
-from network.vqgan.encoder import Encoder
-from network.vqgan.decoder import Decoder
-from network.vqgan.codebook import CodeBook
+from network.vqgan.submodule.encoder import Encoder
+from network.vqgan.submodule.decoder import Decoder
+from network.vqgan.submodule.codebook import CodeBook
 
 
 class VQVAE(nn.Module):

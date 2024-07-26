@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import os
 
-from network.vqTransformer.mingpt import GPT
+from network.vqTransformer.submodule.mingpt import GPT
 
 
 class VQTransformer(nn.Module):
