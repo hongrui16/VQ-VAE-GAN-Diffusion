@@ -104,7 +104,7 @@ def main(args, config):
     
     vqgan_vqvae_worker = VQGANVQVAEWorker(
         model=vqvae,
-        run=run,
+        # run=run,
         device=device,
         experiment_dir=exp_dir,
         logger = logger,
@@ -127,10 +127,11 @@ def main(args, config):
     if 'transformer' in model_name.lower():
         vqTransformer_worker = VQTransformerWorker(
             model=vqgan_transformer,
-            run=run,
+            # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
+            train_dataset= train_dataset,
             save_img_dir = save_dir,
             args = args,
             val_dataloader=val_dataloader,
@@ -146,10 +147,11 @@ def main(args, config):
     if 'diffusion' in model_name.lower():
         vqdiffusion_worker = VQDiffusionWorker(
             model=vqdiffusion,
-            run=run,
+            # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
+            train_dataset= train_dataset,
             save_img_dir = save_dir,
             args = args,
             val_dataloader=val_dataloader,

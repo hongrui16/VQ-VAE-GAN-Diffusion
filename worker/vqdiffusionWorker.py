@@ -19,6 +19,7 @@ class VQDiffusionWorker:
         experiment_dir: str = "experiments",
         device: str = "cpu",
         logger = None,
+        train_dataset = None,
         save_img_dir = None,
         args = None,
         val_dataloader = None,
@@ -40,6 +41,7 @@ class VQDiffusionWorker:
         self.save_img_dir = save_img_dir
         self.args = args
         self.val_dataloader = val_dataloader
+        self.global_step = 0
 
 
         self.vqdiffusion.to(device)
@@ -50,6 +52,24 @@ class VQDiffusionWorker:
             self.optim = self.configure_optimizers(
                 learning_rate=learning_rate, beta1=beta1, beta2=beta2
             )
+
+            num_iters_per_epoch = len(train_dataset)//config['dataset']['batch_size']
+            self.save_step = 100
+            if num_iters_per_epoch < 0.1*self.save_step:
+                self.save_step = 1
+            elif num_iters_per_epoch < 0.5*self.save_step:
+                self.save_step = 5
+            elif num_iters_per_epoch < 1.5*self.save_step:
+                self.save_step = 10
+            elif num_iters_per_epoch < 10*self.save_step:
+                self.save_step = 50
+            elif num_iters_per_epoch < 50*self.save_step:
+                self.save_step = 100
+            else:
+                self.save_step = 200
+
+            self.logger.info(f"Save step set to {self.save_step}")             
+
 
     def configure_optimizers(
         self, learning_rate: float = 4.5e-06, beta1: float = 0.9, beta2: float = 0.95
@@ -77,30 +97,33 @@ class VQDiffusionWorker:
                     context={"stage": "Diffusion"},
                 )
 
-                if index % 10 == 0:
+                if self.global_step % self.save_step == 0:
                     print(
                         f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | Diffusion Loss : {loss:.4f}"
                     )
 
                     _, sampled_imgs = self.vqdiffusion.log_images(imgs[0][None])
 
-                    self.run.track(
-                        Image(
-                            torchvision.utils.make_grid(sampled_imgs)
-                            .mul(255)
-                            .add_(0.5)
-                            .clamp_(0, 255)
-                            .permute(1, 2, 0)
-                            .to("cpu", torch.uint8)
-                            .numpy()
-                        ),
-                        name="Images",
-                        step=index,
-                        context={"stage": "Diffusion"},
-                    )
+                    if self.run is not None:
+                        self.run.track(
+                            Image(
+                                torchvision.utils.make_grid(sampled_imgs)
+                                .mul(255)
+                                .add_(0.5)
+                                .clamp_(0, 255)
+                                .permute(1, 2, 0)
+                                .to("cpu", torch.uint8)
+                                .numpy()
+                            ),
+                            name="Images",
+                            step=index,
+                            context={"stage": "Diffusion"},
+                        )
 
                 if self.args.debug:
                     break
+                
+                self.global_step += 1
 
             if epoch == 0:
                 print_gpu_memory_usage(self.logger)

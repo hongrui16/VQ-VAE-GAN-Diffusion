@@ -19,7 +19,7 @@ import torchvision.utils as vutils
 
 from utils.utils import weights_init
 from utils.utils import print_gpu_memory_usage, denormalize
-from network.vqgan.discriminator import Discriminator
+from network.vqgan.submodule.discriminator import Discriminator
 
 
 class VQGANVQVAEWorker:
@@ -28,7 +28,7 @@ class VQGANVQVAEWorker:
         self,
         model: torch.nn.Module,
         run: Run = None,
-        device: str or torch.device = "cpu",
+        device: str = "cpu",
         experiment_dir = None,
         logger = None,
         train_dataset = None,
@@ -38,7 +38,6 @@ class VQGANVQVAEWorker:
         config = None,
     ):
         model_name = config['architecture']['model_name']
-        train_vqvae = config['architecture']['vqvae']['train_vqvae']
         
         learning_rate = config['trainer']['vqvae']['learning_rate']
         beta1 = config['trainer']['vqvae']['beta1']
@@ -91,12 +90,9 @@ class VQGANVQVAEWorker:
                 if os.path.exists(discrimator_weight_path):
                     self.discriminator.load_state_dict(torch.load(discrimator_weight_path))
                     self.logger.info(f"Discriminator loaded from {discrimator_weight_path}")
-
-        if train_vqvae:
-            num_training_iters = len(train_dataset)//config['dataset']['batch_size']
-            save_max_num_per_epoch = 20
-            self.save_step = min(100, num_training_iters//save_max_num_per_epoch)
-            
+        
+        train_vqvae = config['architecture']['vqvae']['train_vqvae']
+        if train_vqvae:                     
             # Loss parameters
             self.perceptual_loss = lpips.LPIPS(net=perceptual_model).to(self.device)
 
@@ -111,6 +107,22 @@ class VQGANVQVAEWorker:
             self.perceptual_loss_factor = perceptual_loss_factor
             self.rec_loss_factor = rec_loss_factor
 
+            num_iters_per_epoch = len(train_dataset)//config['dataset']['batch_size']
+            self.save_step = 100
+            if num_iters_per_epoch < 0.1*self.save_step:
+                self.save_step = 1
+            elif num_iters_per_epoch < 0.5*self.save_step:
+                self.save_step = 5
+            elif num_iters_per_epoch < 1.5*self.save_step:
+                self.save_step = 10
+            elif num_iters_per_epoch < 10*self.save_step:
+                self.save_step = 50
+            elif num_iters_per_epoch < 50*self.save_step:
+                self.save_step = 100
+            else:
+                self.save_step = 200
+
+            self.logger.info(f"Save step set to {self.save_step}")    
 
     def configure_optimizers(
         self, learning_rate: float = 2.25e-05, beta1: float = 0.5, beta2: float = 0.9
@@ -201,22 +213,22 @@ class VQGANVQVAEWorker:
             vq_loss = perceptual_rec_loss + q_loss
         # ======================================================================================================================
         # Tracking metrics
-
-        self.run.track(
-            perceptual_rec_loss,
-            name="Perceptual & Reconstruction loss",
-            step=self.global_step,
-            context={"stage": f"{self.model_name}"},
-        )
-
-        self.run.track(
-            vq_loss, name="VQ Loss", step=self.global_step, context={"stage": f"{self.model_name}"}
-        )
-
-        if self.model_name == "vqgan":
+        if self.run is not None:
             self.run.track(
-                gan_loss, name="GAN Loss", step=self.global_step, context={"stage": f"{self.model_name}"}
+                perceptual_rec_loss,
+                name="Perceptual & Reconstruction loss",
+                step=self.global_step,
+                context={"stage": f"{self.model_name}"},
             )
+
+            self.run.track(
+                vq_loss, name="VQ Loss", step=self.global_step, context={"stage": f"{self.model_name}"}
+            )
+
+            if self.model_name == "vqgan":
+                self.run.track(
+                    gan_loss, name="GAN Loss", step=self.global_step, context={"stage": f"{self.model_name}"}
+                )
 
         # =======================================================================================================================
         # Backpropagation
@@ -312,21 +324,22 @@ class VQGANVQVAEWorker:
 
                             gif_img = gif_img.astype(np.uint8)
 
-                            self.run.track(
-                                Image(
-                                    torchvision.utils.make_grid(
-                                        torch.cat(
-                                            (
-                                                imgs,
-                                                decoded_images,
-                                            ),
-                                        )
-                                    ).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
-                                ),
-                                name=f"{self.model_name} Reconstruction",
-                                step=self.global_step,
-                                context={"stage": f"{self.model_name}"},
-                            )
+                            if self.run is not None:
+                                self.run.track(
+                                    Image(
+                                        torchvision.utils.make_grid(
+                                            torch.cat(
+                                                (
+                                                    imgs,
+                                                    decoded_images,
+                                                ),
+                                            )
+                                        ).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
+                                    ),
+                                    name=f"{self.model_name} Reconstruction",
+                                    step=self.global_step,
+                                    context={"stage": f"{self.model_name}"},
+                                )
 
                             self.gif_images.append(gif_img)
 
