@@ -1,5 +1,5 @@
 architecture:
-  model_name: "vqvae" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion
+  model_name: "vqdiffusion" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion
   vqvae:
     img_channels: 3 # 1, 3
     img_size: 256
@@ -27,14 +27,16 @@ architecture:
     freeze_weights: False
   
   diffusion:
-    diffusion_steps: 1000
-    sampling_steps: 1000
+    diffusion_steps: 500
+    sampling_steps: 500
     noise_schedule: "linear"
     diffusion_type: 'Continuous' #'VQ_Official', 'Continuous'
     objective: 'pred_noise'
     resume_path: None
     train_diffusion: True
     freeze_weights: False
+    indices_to_dist_fn: 'lookup_table' # 'lookup_table' or 'one_hot'
+    gaussian_dim: 512
 
 
 dataset:

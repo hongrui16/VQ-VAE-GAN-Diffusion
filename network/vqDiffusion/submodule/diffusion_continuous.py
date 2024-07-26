@@ -21,7 +21,7 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
     
 
-from network.vqDiffusion.unet2d import Unet2D
+from network.vqDiffusion.submodule.unet2d import Unet2D
 
 # constants
 
@@ -203,8 +203,13 @@ class GaussianDiffusion2D(Module):
         auto_normalize = True,
         vocab_size = 1024,
         distribute_dim = -1, ## the dim is the distribution of indices probability
+        gaussian_dim = 512,
+        indices_to_dist_fn = None,
     ):
         super().__init__()
+
+        assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
+
         self.model = model
         self.channels = self.model.channels
         self.self_condition = self.model.self_condition
@@ -215,6 +220,8 @@ class GaussianDiffusion2D(Module):
         self.codebook_size = vocab_size
         self.distruibute_dim = distribute_dim
 
+        self.gaussian_dim = gaussian_dim
+        self.indices_to_dist_fn = indices_to_dist_fn
 
         assert objective in {'pred_noise', 'pred_x0', 'pred_v'}, 'objective must be either pred_noise (predict noise) or pred_x0 (predict image start) or pred_v (predict v [v-parameterization as defined in appendix D of progressive distillation paper, used in imagen-video successfully])'
 
@@ -271,6 +278,8 @@ class GaussianDiffusion2D(Module):
         register_buffer('posterior_mean_coef1', betas * torch.sqrt(alphas_cumprod_prev) / (1. - alphas_cumprod))
         register_buffer('posterior_mean_coef2', (1. - alphas_cumprod_prev) * torch.sqrt(alphas) / (1. - alphas_cumprod))
 
+        register_buffer('gaussian_lookup_table', torch.randn(self.codebook_size, gaussian_dim))
+
         # calculate loss weight
 
         snr = alphas_cumprod / (1 - alphas_cumprod)
@@ -295,6 +304,20 @@ class GaussianDiffusion2D(Module):
             onehot = onehot.permute(0, 2, 1)  # 将one-hot编码的维度调整到第1维
 
         return onehot * (1 - smoothing) + smoothing / self.codebook_size
+
+    def onehot_to_indices(self, onehot):
+        if self.distruibute_dim == 1:
+            onehot = onehot.permute(0, 2, 1)
+        return onehot.argmax(dim=-1)
+    
+    def indices_to_gaussian(self, indices):
+        return self.gaussian_lookup_table[indices]
+
+    def gaussian_to_indices(self, gaussian):
+        if self.distruibute_dim == 1:
+            gaussian = gaussian.permute(0, 2, 1)
+        indices = torch.argmin(torch.cdist(gaussian, self.gaussian_lookup_table), dim=-1)
+        return indices
 
 
     def predict_start_from_noise(self, x_t, t, noise):
@@ -393,8 +416,10 @@ class GaussianDiffusion2D(Module):
         batch_size = batch_size
 
         input_indices = torch.randint(0, self.codebook_size, (batch_size, self.seq_length), device= device)  # 示例离散表示，长度为16
-
-        img = self.indices_to_smooth_onehot(input_indices)
+        if self.indices_to_dist_fn == 'lookup_table':
+            img = self.indices_to_gaussian(input_indices)
+        else:
+            img = self.indices_to_smooth_onehot(input_indices)
         # print('img:', img.shape, img[:,0])
         x_start = None
 
@@ -405,7 +430,12 @@ class GaussianDiffusion2D(Module):
         # img = self.unnormalize(img)
         if self.distruibute_dim == 1:
             img = img.permute(0, 2, 1)
-        indices = img.argmax(dim = -1).int()
+        
+        if self.indices_to_dist_fn == 'lookup_table':
+            indices = self.gaussian_to_indices(img)
+        else:
+            indices = self.onehot_to_indices(img)
+        
         return indices
 
     @torch.no_grad()
@@ -419,7 +449,10 @@ class GaussianDiffusion2D(Module):
 
         input_indices = torch.randint(0, self.codebook_size, (batch_size, self.seq_length), device= device)  # 示例离散表示，长度为16
 
-        img = self.indices_to_smooth_onehot(input_indices)
+        if self.indices_to_dist_fn == 'lookup_table':
+            img = self.indices_to_gaussian(input_indices)
+        else:
+            img = self.indices_to_smooth_onehot(input_indices)
 
         x_start = None
 
@@ -449,7 +482,13 @@ class GaussianDiffusion2D(Module):
         # img = self.unnormalize(img)
         if self.distruibute_dim == 1:
             img = img.permute(0, 2, 1)
-        indices = img.argmax(dim = -1).int()
+
+        if self.indices_to_dist_fn == 'lookup_table':
+            indices = self.gaussian_to_indices(img)
+        else:
+            indices = self.onehot_to_indices(img)
+
+
         return indices
 
     @torch.no_grad()
@@ -509,19 +548,11 @@ class GaussianDiffusion2D(Module):
         # predict and take gradient step
         # print('x_self_cond:', x_self_cond)
         # print('t', t)
+        print('x:', x.shape)
         model_out = self.model(x, x_self_cond, t)
-
-        if self.objective == 'pred_noise':
-            target = noise
-        elif self.objective == 'pred_x0':
-            target = x_start
-        elif self.objective == 'pred_v':
-            v = self.predict_v(x_start, t, noise)
-            target = v
-        else:
-            raise ValueError(f'unknown objective {self.objective}')
-
-        loss = F.mse_loss(model_out, target, reduction = 'none')
+        print('model_out:', model_out.shape)
+        print('noise:', noise.shape)
+        loss = F.mse_loss(model_out, noise, reduction = 'none')
         loss = reduce(loss, 'b ... -> b', 'mean')
 
         loss = loss * extract(self.loss_weight, t, loss.shape)
@@ -531,9 +562,12 @@ class GaussianDiffusion2D(Module):
         b, c  = x0.shape
         device = x0.device
         t = torch.randint(0, self.num_timesteps, (b,), device=device).long()
-        onehot_smoothed_x0 = self.indices_to_smooth_onehot(x0)
+        if self.indices_to_dist_fn == 'lookup_table':            
+            x0 = self.indices_to_gaussian(x0)
+        else:
+            x0 = self.indices_to_smooth_onehot(x0)
         out = {}
-        loss = self.p_losses(onehot_smoothed_x0, t, *args, **kwargs)
+        loss = self.p_losses(x0, t, *args, **kwargs)
         out['loss'] = loss 
         return out
 

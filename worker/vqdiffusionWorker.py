@@ -90,12 +90,13 @@ class VQDiffusionWorker:
                 loss.backward()
                 self.optim.step()
 
-                self.run.track(
-                    loss,
-                    name="diffusion_loss",
-                    step=index,
-                    context={"stage": "Diffusion"},
-                )
+                if not self.run is None:
+                    self.run.track(
+                        loss,
+                        name="diffusion_loss",
+                        step=index,
+                        context={"stage": "Diffusion"},
+                    )
 
                 if self.global_step % self.save_step == 0:
                     print(

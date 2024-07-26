@@ -63,7 +63,7 @@ def main(args, config):
     # for key, value in kwargs.items():
     #     logger.info(f"{key}: {value}")
     # logging.info(f"<<<<<<<<<<<<<<<<***************hyperparameters***********************************************")
-    shutil.copy(args.config_path, os.path.join(exp_dir, "config_3channel.yml"))
+    shutil.copy(args.config, os.path.join(exp_dir, "config_3channel.yml"))
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")

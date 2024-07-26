@@ -11,7 +11,7 @@ According to the official implementation.
 import torch
 import torch.nn as nn
 
-from network.vqgan.common import DownsampleBlock, GroupNorm, NonLocalBlock, ResidualBlock, Swish
+from network.vqgan.submodule.common import DownsampleBlock, GroupNorm, NonLocalBlock, ResidualBlock, Swish
 
 
 class Encoder(nn.Module):

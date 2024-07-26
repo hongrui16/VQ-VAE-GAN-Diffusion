@@ -30,8 +30,11 @@ class VQDiffusion(nn.Module):
         objective = config['architecture']['diffusion']['objective']
         seq_length = config['architecture']['vqvae']['latent_channels']
         codebook_size = config['architecture']['vqvae']['num_codebook_vectors']
+        indices_to_dist_fn = config['architecture']['diffusion']['indices_to_dist_fn']
+        gaussian_dim = config['architecture']['diffusion']['gaussian_dim']
 
         assert diffusion_type in ['VQ_Official', 'Continuous'], "Diffusion type should be either 'VQ_Official' or 'Continuous'"
+        assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
 
         self.device = device
         self.vqvae = vqvae
@@ -43,13 +46,21 @@ class VQDiffusion(nn.Module):
             unet_channels = codebook_size
             unet_out_dim = codebook_size - 1
         else:
-            if distribute_dim == 1:
-                unet_channels = codebook_size
-                unet_out_dim = codebook_size
+            if indices_to_dist_fn == 'one_hot':
+                if distribute_dim == 1:
+                    unet_channels = codebook_size
+                    unet_out_dim = codebook_size
+                else:
+                    unet_channels = seq_length
+                    unet_out_dim = seq_length
             else:
-                unet_channels = seq_length
-                unet_out_dim = seq_length
-                    
+                if distribute_dim == 1:
+                    unet_channels = seq_length
+                    unet_out_dim = seq_length
+                else:
+                    unet_channels = gaussian_dim
+                    unet_out_dim = gaussian_dim
+
         self.unet = Unet2D(
                             dim = 64,
                             dim_mults = (1, 2, 4, 8),
@@ -65,7 +76,8 @@ class VQDiffusion(nn.Module):
         else:                
             self.diffusion = GaussianDiffusion2D(self.unet,  seq_length = seq_length,
                                             timesteps = time_steps, sampling_timesteps = sampling_timesteps,vocab_size = codebook_size,
-                                            distribute_dim = distribute_dim
+                                            distribute_dim = distribute_dim, gaussian_dim = gaussian_dim, 
+                                            indices_to_dist_fn = indices_to_dist_fn,
                                             )
         
         diffusion_resume_path = config['architecture']['diffusion']['resume_path']
