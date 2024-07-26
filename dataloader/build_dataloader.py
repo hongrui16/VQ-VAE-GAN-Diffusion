@@ -2,10 +2,10 @@
 import torch
 from torch.utils.data import DataLoader
 
-from dataloader.cifar10_loader import load_cifar10
-from dataloader.mnist_loader import load_mnist
-from dataloader.InterHand26M_loader import load_InterHand26M
-from dataloader.Oxford102Flower_loader import load_OxfordFlowers
+from dataloader.loader.cifar10_loader import load_cifar10
+from dataloader.loader.mnist_loader import load_mnist
+from dataloader.loader.InterHand26M_loader import load_InterHand26M
+from dataloader.loader.Oxford102Flower_loader import load_OxfordFlowers
 
 
 def load_dataloader(
