@@ -11,13 +11,13 @@ import tqdm
 
 from utils.utils import print_gpu_memory_usage
 
-class VQTransformerTrainer:
+class VQTransformerWorker:
     def __init__(
         self,
         model: nn.Module,
-        run: Run,
+        run: Run = None,
         experiment_dir: str = "experiments",
-        device: str = "cuda",
+        device: str = "cpu",
         logger = None,
         save_img_dir = None,
         args = None,
@@ -29,6 +29,8 @@ class VQTransformerTrainer:
         learning_rate = config['trainer']['transformer']['learning_rate']
         beta1 = config['trainer']['transformer']['beta1']
         beta2 = config['trainer']['transformer']['beta2']
+        self.num_codebook_vectors = config['architecture']['vqvae']['num_codebook_vectors']
+        self.seq_len = config['architecture']['vqvae']['latent_channels']
 
         self.vqTransModel = model
         self.run = run
@@ -42,10 +44,11 @@ class VQTransformerTrainer:
 
         self.vqTransModel.to(device)
         self.device = device
-
-        self.optim = self.configure_optimizers(
-            learning_rate=learning_rate, beta1=beta1, beta2=beta2
-        )
+        train_diffusion = config['architecture']['transformer']['train_diffusion']
+        if train_diffusion:
+            self.optim = self.configure_optimizers(
+                learning_rate=learning_rate, beta1=beta1, beta2=beta2
+            )
 
     def configure_optimizers(
         self, learning_rate: float = 4.5e-06, beta1: float = 0.9, beta2: float = 0.95
@@ -149,7 +152,7 @@ class VQTransformerTrainer:
                 break
             
     
-    def generate_images(self, n_images: int = 5, epoch = -1):
+    def generate_images(self, n_images: int = 5, epoch = -1, random_indices = False):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
         

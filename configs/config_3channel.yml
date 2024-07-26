@@ -11,8 +11,8 @@ architecture:
     dropout: 0.0
     attention_resolution: [16]
     num_codebook_vectors: 1024
-    resume_path: None # '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
-    train_vqvae: True # True, False
+    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
+    train_vqvae: False # True, False
     freeze_weights: True # True, False
 
   transformer:
@@ -27,22 +27,22 @@ architecture:
     freeze_weights: False
   
   diffusion:
-    diffusion_steps: 100
-    sampling_steps: 100
+    diffusion_steps: 1000
+    sampling_steps: 1000
     noise_schedule: "linear"
-    diffusion_type: 'VQ_Official' #'VQ_Official', 'Continuous'
+    diffusion_type: 'Continuous' #'VQ_Official', 'Continuous'
     objective: 'pred_noise'
     resume_path: None
-    train_diffusion: False
+    train_diffusion: True
     freeze_weights: False
 
 
 dataset:
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
-  batch_size: 20 # 20 for VAE, 100 for diffusion Unet2D,
+  batch_size: 100 # 20 for VAE, 100 for diffusion Unet2D,
   num_workers: 5
-  dataset_name: 'InterHand26M' # mnist, cifar10, InterHand26M, Oxford102Flower
+  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
   get_hand_mask: True ### True or False; only for InterHand26M
   return_annotations: False
   max_train_samples: 'inf'
@@ -51,7 +51,7 @@ dataset:
 
 
 trainer:  
-  num_epochs: 60
+  num_epochs: 50
   log_dir: "log"
   
   vqvae:

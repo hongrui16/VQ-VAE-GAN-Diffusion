@@ -2,57 +2,174 @@
 import argparse
 
 import yaml
+from aim import Run
+from datetime import datetime
+import os
+import torch
+import sys
+import logging
+import shutil
 
-from trainer.trainer import Trainer
-from network.vqganTransformer.vqganTransformer import VQGANTransformer
-from network.vqgan.vqgan import VQGAN
+from dataloader.build_dataloader import load_dataloader
+
+
+from network.vqgan.vqvae import VQVAE
+from network.vqTransformer.vqTransformer import VQTransformer
+from network.vqDiffusion.vqDiffusion import VQDiffusion
+
+from worker.vqganVqvaeWorker import VQGANVQVAEWorker
+from worker.vqTransformerWorker import VQTransformerWorker
+from worker.vqdiffusionWorker import VQDiffusionWorker
+
+
 
 
 def main(args, config):
+    if args.debug:
+        config['dataset']["batch_size"] = 1
 
-    vqgan = VQGAN(**config["architecture"]["vqgan"])
-    vqgan.load_checkpoint("./experiments/checkpoints/vqgan.pt")
+    model_name = config['architecture']["model_name"]
+    batch_size = config['dataset']["batch_size"] 
+    dataset_name = config['dataset']["dataset_name"]
+    num_workers = config['dataset']["num_workers"]
+    vqvae_resume_path = config['architecture']['vqvae']['resume_path']
 
-    transformer = VQGANTransformer(
-        vqgan, device=args.device, **config["architecture"]["transformer"]
-    )
-    transformer.load_checkpoint("./experiments/checkpoints/transformer.pt")
+    config['architecture']['vqvae']['freeze_weights'] = True
+    config['architecture']['diffusion']['freeze_weights'] = True
+    config['architecture']['transformer']['freeze_weights'] = True
+    config['architecture']['vqvae']['train_vqvae'] = False
+    config['architecture']['diffusion']['train_diffusion'] = False
+    config['architecture']['transformer']['train_transformer'] = False
+
+
+    if vqvae_resume_path is None:
+        raise ValueError("Please provide the path to the pretrained VQVAE model")
+    if not os.path.exists(vqvae_resume_path):
+        raise ValueError(f"VQVAE model not found at {vqvae_resume_path}")
     
-    trainer = Trainer(
-        vqgan,
-        transformer,
-        run=None,
-        config=config["trainer"],
-        seed=args.seed,
-        device=args.device,
-    )
+    root_dir = vqvae_resume_path[:vqvae_resume_path.find('vqvae.pt')]
 
-    trainer.generate_images()
+    current_timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+
+    exp_dir = os.path.join(root_dir, 'test', f'{current_timestamp}')
+    os.makedirs(exp_dir, exist_ok=True)
+    # checkpoint_dir = os.path.join(exp_dir, "checkpoints")
+    # os.makedirs(checkpoint_dir, exist_ok=True)
+    save_dir = os.path.join(exp_dir, "generated_images")
+    os.makedirs(save_dir, exist_ok=True)
+
+    
+    log_path = os.path.join(exp_dir, "info.log")
+    
+    # Log to file & tensorboard writer
+    logging.basicConfig(level=logging.INFO, format='%(message)s', handlers=[logging.FileHandler(log_path), logging.StreamHandler()])
+    logger = logging.getLogger(f'{model_name}-LOG')
+    logging.info(f"Logging to {exp_dir}")
+
+    ## print all the args into log file
+    # logging.info(f"<<<<<<<<<<<<<<<<***************hyperparameters***********************************************")
+    # kwargs = vars(args)
+    # for key, value in kwargs.items():
+    #     logger.info(f"{key}: {value}")
+    # logging.info(f"<<<<<<<<<<<<<<<<***************hyperparameters***********************************************")
+
+    if torch.cuda.is_available():
+        device = torch.device("cuda:0")
+        logging.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
+    else:
+        device = torch.device("cpu")
+        
+        logging.info("Using CPU")
+
+    vqvae = VQVAE(logger= logger, config = config)
+    logging.info(f"VQVAE model created")
+
+
+    if 'transformer' in model_name.lower():
+        vqgan_transformer = VQTransformer(
+            vqvae, config = config, device=device
+        )
+        logging.info(f"{model_name} Transformer models created")
+
+    if 'diffusion' in model_name.lower():
+        vqdiffusion = VQDiffusion(vqvae, device=device, 
+                                    logger=logger, config = config)
+        logging.info(f"{model_name} Diffusion models created")
+
+    # train_dataloader, train_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, 
+    #                                                   num_workers = num_workers, split=train_split, 
+    #                                                   logger=logger, config = config)
+    val_dataloader, val_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, 
+                                                  num_workers = num_workers, split='val', 
+                                                    logger=logger, config = config)    
+    logging.info(f"Data loaded")
+
+
+
+    
+    vqgan_vqvae_worker = VQGANVQVAEWorker(
+        model=vqvae,
+        device=device,
+        experiment_dir=exp_dir,
+        logger = logger,
+        save_img_dir = save_dir,
+        args = args,
+        val_dataloader=val_dataloader,
+        config = config,
+    )
+    logger.info(f'Initializing {model_name.lower} Worker')
+    n_images = 34
+    vqgan_vqvae_worker.generate_images(n_images = n_images, random_indices=True)
+    logger.info(f'Generated {n_images} images')
+
+
+    if 'transformer' in model_name.lower():
+        vqTransformer_worker = VQTransformerWorker(
+            model=vqgan_transformer,
+            device=device,
+            experiment_dir=exp_dir,
+            logger = logger,
+            save_img_dir = save_dir,
+            args = args,
+            val_dataloader=val_dataloader,
+            config = config,
+        )
+        logger.info('Initializing Transformer Worker')
+
+
+    
+    if 'diffusion' in model_name.lower():
+        vqdiffusion_worker = VQDiffusionWorker(
+            model=vqdiffusion,
+            device=device,
+            experiment_dir=exp_dir,
+            logger = logger,
+            save_img_dir = save_dir,
+            args = args,
+            val_dataloader=val_dataloader,
+            config = config,
+        )
+        logger.info('Initializing Diffusion Worker')
+
+
+
+    ### get the gpu memory usage and print it out
+
+    logging.info(f'Memory Usage:{torch.cuda.memory_allocated()}')  
+
 
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config_path",
+        "--config",
         type=str,
-        default="configs/default.yml",
+        default=None,
+
         help="path to config file",
     )
-    parser.add_argument(
-        "--dataset_name",
-        type=str,
-        choices=["mnist", "cifar", "custom"],
-        default="mnist",
-        help="Dataset for the model",
-    )
-    parser.add_argument(
-        "--device",
-        type=str,
-        default="cuda",
-        choices=["cpu", "cuda"],
-        help="Device to train the model on",
-    )
+    
     parser.add_argument(
         "--seed",
         type=str,
@@ -60,10 +177,89 @@ if __name__ == "__main__":
         help="Seed for Reproducibility",
     )
 
-    args = parser.parse_args()
+    parser.add_argument(
+    '--debug', 
+    action='store_true', 
+    help='Enable debug mode')
+
+
+    # parser.add_argument(
+    #     "--log_dir",
+    #     type=str,
+    #     default="log",
+    #     help="path to save log files",
+    # )
+
+
+
+    # parser.add_argument(
+    #     "--batch_size",
+    #     type=int,
+    #     default=2,
+    #     help="batch size",
+    #     )
+    
+    # parser.add_argument(
+    #     '--num_epochs',
+    #     type=int,
+    #     default=1,
+    #     help='number of epochs to train'
+    # )
+
+
+
+    # parser.add_argument(
+    #     "--dataset_name",
+    #     type=str,
+    #     default="mnist",
+    #     help="Dataset for the model",
+    # )
+    # parser.add_argument(
+    #     "--device",
+    #     type=str,
+    #     default="cuda",
+    #     choices=["cpu", "cuda"],
+    #     help="Device to train the model on",
+    # )
+    
+
+    
+
+    # parser.add_argument(
+    #     '--model_name',
+    #     type=str,
+    #     help='input model name, vqgan, vqvae, vqdiffusion'
+    # )
+    
+    
+
+    # parser.add_argument(
+    #     '--resume_ckpt_dir',
+    #     type=str,
+    #     default=None,
+    #     help='path to the checkpoint to resume training')
+    
+    # parser.add_argument(
+    #     '--no_train_transformer',
+    #     action='store_false',
+    #     dest='train_transformer',
+    #     help='Do not train the transformer (default is to train)'
+    # )
+
 
     args = parser.parse_args()
-    with open(args.config_path) as f:
+    with open(args.config) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     main(args, config)
+
+
+
+
+'''
+salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:A100.80gb:1 --mem=80gb -t 0-24:00:00
+salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:A100.40gb:1 --mem=40gb -t 0-24:00:00
+salloc -p gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:3g.40gb:1 --mem=40gb -t 0-24:00:00
+salloc -p contrib-gpuq -q gpu --nodes=1 --ntasks-per-node=6 --gres=gpu:3g.40gb:1 --mem=40gb -t 0-12:00:00
+
+'''

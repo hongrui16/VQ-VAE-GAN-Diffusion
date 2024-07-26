@@ -22,15 +22,14 @@ from utils.utils import print_gpu_memory_usage, denormalize
 from network.vqgan.discriminator import Discriminator
 
 
-class VQGANVQVAETrainer:
+class VQGANVQVAEWorker:
     """Trainer class for VQGAN, contains step, train methods"""
-
     def __init__(
         self,
         model: torch.nn.Module,
-        run: Run,
-        device: str or torch.device = "cuda",
-        experiment_dir: str = "./experiments",
+        run: Run = None,
+        device: str or torch.device = "cpu",
+        experiment_dir = None,
         logger = None,
         train_dataset = None,
         save_img_dir = None,
@@ -39,6 +38,7 @@ class VQGANVQVAETrainer:
         config = None,
     ):
         model_name = config['architecture']['model_name']
+        train_vqvae = config['architecture']['vqvae']['train_vqvae']
         
         learning_rate = config['trainer']['vqvae']['learning_rate']
         beta1 = config['trainer']['vqvae']['beta1']
@@ -55,6 +55,9 @@ class VQGANVQVAETrainer:
         self.get_hand_mask = config['dataset']['get_hand_mask'] ### only for InterHand26M dataset
         self.dataset_name = config['dataset']['dataset_name']
 
+        self.num_codebook_vectors = config['architecture']['vqvae']['num_codebook_vectors']
+        self.seq_len = config['architecture']['vqvae']['latent_channels']
+
         self.run = run
         self.device = device
         self.logger = logger
@@ -64,15 +67,19 @@ class VQGANVQVAETrainer:
         self.val_dataloader = val_dataloader
 
 
-
-
-        num_training_iters = len(train_dataset)//config['dataset']['batch_size']
-        save_max_num_per_epoch = 20
-        self.save_step = min(100, num_training_iters//save_max_num_per_epoch)
-        
         # VQGAN parameters
         self.vqvae = model
-            
+        
+        # Save directory
+        self.expriment_save_dir = experiment_dir
+
+        # Miscellaneous
+        self.global_step = 0
+        self.sample_batch = None
+        self.gif_images = []
+        self.logger = logger
+
+
         self.vqvae.to(self.device)
         if "vqgan" in model_name.lower():
             # Discriminator parameters
@@ -85,28 +92,25 @@ class VQGANVQVAETrainer:
                     self.discriminator.load_state_dict(torch.load(discrimator_weight_path))
                     self.logger.info(f"Discriminator loaded from {discrimator_weight_path}")
 
-        # Loss parameters
-        self.perceptual_loss = lpips.LPIPS(net=perceptual_model).to(self.device)
+        if train_vqvae:
+            num_training_iters = len(train_dataset)//config['dataset']['batch_size']
+            save_max_num_per_epoch = 20
+            self.save_step = min(100, num_training_iters//save_max_num_per_epoch)
+            
+            # Loss parameters
+            self.perceptual_loss = lpips.LPIPS(net=perceptual_model).to(self.device)
 
-        # Optimizers
-        self.opt_vqvae, self.opt_disc = self.configure_optimizers(
-            learning_rate=learning_rate, beta1=beta1, beta2=beta2
-        )
+            # Optimizers
+            self.opt_vqvae, self.opt_disc = self.configure_optimizers(
+                learning_rate=learning_rate, beta1=beta1, beta2=beta2
+            )
 
-        # Hyperprameters
-        self.disc_factor = disc_factor
-        self.disc_start = disc_start
-        self.perceptual_loss_factor = perceptual_loss_factor
-        self.rec_loss_factor = rec_loss_factor
+            # Hyperprameters
+            self.disc_factor = disc_factor
+            self.disc_start = disc_start
+            self.perceptual_loss_factor = perceptual_loss_factor
+            self.rec_loss_factor = rec_loss_factor
 
-        # Save directory
-        self.expriment_save_dir = experiment_dir
-
-        # Miscellaneous
-        self.global_step = 0
-        self.sample_batch = None
-        self.gif_images = []
-        self.logger = logger
 
     def configure_optimizers(
         self, learning_rate: float = 2.25e-05, beta1: float = 0.5, beta2: float = 0.9
@@ -182,8 +186,7 @@ class VQGANVQVAETrainer:
             disc_fake = self.discriminator(decoded_images)
 
             disc_factor = self.vqvae.adopt_weight(
-                self.disc_factor, self.global_step, threshold=self.disc_start
-            )
+                self.disc_factor, self.global_step, threshold=self.disc_start)
 
             g_loss = -torch.mean(disc_fake)
 
@@ -343,7 +346,7 @@ class VQGANVQVAETrainer:
                 print_gpu_memory_usage(self.logger)
             self.save_checkpoint(self.expriment_save_dir)    
 
-            self.generate_images(n_images=4, epoch=epoch)
+            self.generate_images(n_images=4, epoch=epoch, dataloader = self.val_dataloader)
 
 
             torch.cuda.empty_cache()
@@ -354,16 +357,34 @@ class VQGANVQVAETrainer:
             if self.args.debug:
                 break
     
-    def generate_images(self, n_images: int = 5, dataloader: torch.utils.data.DataLoader = None, 
-                               epoch = -1):
+    def generate_images(self, n_images: int = 5, dataloader = None, 
+                               epoch = -1, random_indices = False):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
 
         self.vqvae.eval()
         self.vqvae.to(self.device)
 
-        if dataloader is None:
-            dataloader = self.val_dataloader
+
+        if random_indices:
+            n_img_per_row = 8
+            n_row = n_images // n_img_per_row
+            n_row = max(1, n_row)
+            start_indices = torch.randint(0, self.num_codebook_vectors, (n_images, self.seq_len)).to(self.device)
+            with torch.no_grad():
+                sampled_imgs = self.z_to_image(start_indices)
+                sampled_imgs = torchvision.utils.make_grid(sampled_imgs, nrow=n_row)
+
+                # sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
+                # sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
+
+                torchvision.utils.save_image(
+                    sampled_imgs,
+                    os.path.join(self.save_img_dir, f"{self.model_name}_generated.jpg"),
+                    nrow=1,
+                )
+            return
+                
         max_bs = 5
         with torch.no_grad():
             for i, input_image in enumerate(dataloader):
@@ -386,7 +407,6 @@ class VQGANVQVAETrainer:
                 # 因为已经在宽度和高度上拼接了，这里 nrow 设置为 1 即可
                 gif_img = torchvision.utils.make_grid(vertical_combined.unsqueeze(0), nrow=1)
 
-                # 转换成 numpy 数组并进行归一化
                 gif_img = gif_img.detach()#.cpu().permute(1, 2, 0).numpy()
                 gif_img = (gif_img - gif_img.min()) / (gif_img.max() - gif_img.min())
 
@@ -397,7 +417,28 @@ class VQGANVQVAETrainer:
                     nrow=1,
                 )
         
+    @torch.no_grad()
+    def z_to_image(
+        self, indices: torch.tensor, p1: int = 16, p2: int = 16
+    ) -> torch.Tensor:
+        """Returns the decoded image from the indices for the codebook embeddings
 
+        Args:
+            indices (torch.tensor): the indices of the vectors in codebook to use for generating the decoder output
+            p1 (int, optional): encoding size. Defaults to 16.
+            p2 (int, optional): encoding size. Defaults to 16.
+
+        Returns:
+            torch.tensor: generated image from decoder
+        """
+
+        ix_to_vectors = self.vqvae.codebook.codebook(indices).reshape(
+            indices.shape[0], p1, p2, 256
+        )
+        ix_to_vectors = ix_to_vectors.permute(0, 3, 1, 2)
+        image = self.vqvae.decode(ix_to_vectors)
+        return image
+    
     def save_checkpoint(self, checkpoint_dir: str):
         """Saves the vqvae model checkpoints"""
         filepath = os.path.join(checkpoint_dir, "vqvae.pt")

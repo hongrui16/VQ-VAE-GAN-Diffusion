@@ -17,9 +17,9 @@ from network.vqgan.vqvae import VQVAE
 from network.vqTransformer.vqTransformer import VQTransformer
 from network.vqDiffusion.vqDiffusion import VQDiffusion
 
-from trainer.vqganVqvaeTrainer import VQGANVQVAETrainer
-from trainer.vqTransformerTrainer import VQTransformerTrainer
-from trainer.vqdiffusionTrainer import VQDiffusionTrainer
+from worker.vqganVqvaeWorker import VQGANVQVAEWorker
+from worker.vqTransformerWorker import VQTransformerWorker
+from worker.vqdiffusionWorker import VQDiffusionWorker
 
 
 
@@ -101,30 +101,31 @@ def main(args, config):
 
 
 
+    
+    vqgan_vqvae_worker = VQGANVQVAEWorker(
+        model=vqvae,
+        run=run,
+        device=device,
+        experiment_dir=exp_dir,
+        logger = logger,
+        train_dataset = train_dataset,
+        save_img_dir = save_dir,
+        args = args,
+        val_dataloader=val_dataloader,
+        config = config,
+    )
+    logger.info(f'Initializing {model_name.lower} Worker')
     train_vqvae = config['architecture']['vqvae']['train_vqvae']
     if train_vqvae:
-        vqgan_vqvae_trainer = VQGANVQVAETrainer(
-            model=vqvae,
-            run=run,
-            device=device,
-            experiment_dir=exp_dir,
-            logger = logger,
-            train_dataset = train_dataset,
-            save_img_dir = save_dir,
-            args = args,
-            val_dataloader=val_dataloader,
-            config = config,
-        )
-
         logger.info(f"Training {model_name} on {device} for {num_epochs} epoch(s).")
-        vqgan_vqvae_trainer.train(
+        vqgan_vqvae_worker.train(
             dataloader=train_dataloader,
             epochs=num_epochs,
         )
 
-    train_transformer = config['architecture']['transformer']['train_transformer']
-    if train_transformer and 'transformer' in model_name.lower():
-        vqTransformer_trainer = VQTransformerTrainer(
+    
+    if 'transformer' in model_name.lower():
+        vqTransformer_worker = VQTransformerWorker(
             model=vqgan_transformer,
             run=run,
             device=device,
@@ -135,13 +136,15 @@ def main(args, config):
             val_dataloader=val_dataloader,
             config = config,
         )
+        logger.info('Initializing Transformer Worker')
+        train_transformer = config['architecture']['transformer']['train_transformer']
+        if train_transformer:
+            logger.info(f"Training {model_name} Transformer on {device} for {num_epochs} epoch(s).")
+            vqTransformer_worker.train(dataloader=train_dataloader, epochs=num_epochs)
 
-        logger.info(f"Training {model_name} Transformer on {device} for {num_epochs} epoch(s).")
-        vqTransformer_trainer.train(dataloader=train_dataloader, epochs=num_epochs)
-
-    train_diffusion = config['architecture']['diffusion']['train_diffusion']
-    if train_diffusion and 'diffusion' in model_name.lower():
-        vqdiffusion_trainer = VQDiffusionTrainer(
+    
+    if 'diffusion' in model_name.lower():
+        vqdiffusion_worker = VQDiffusionWorker(
             model=vqdiffusion,
             run=run,
             device=device,
@@ -152,9 +155,11 @@ def main(args, config):
             val_dataloader=val_dataloader,
             config = config,
         )
-
-        logger.info(f"Training {model_name} Diffusion on {device} for {num_epochs} epoch(s).")
-        vqdiffusion_trainer.train(dataloader=train_dataloader, epochs=num_epochs)
+        logger.info('Initializing Diffusion Worker')
+        train_diffusion = config['architecture']['diffusion']['train_diffusion']
+        if train_diffusion:
+            logger.info(f"Training {model_name} Diffusion on {device} for {num_epochs} epoch(s).")
+            vqdiffusion_worker.train(dataloader=train_dataloader, epochs=num_epochs)
 
 
     ### get the gpu memory usage and print it out
@@ -167,7 +172,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--config_path",
+        "--config",
         type=str,
         default="configs/config_3channel.yml",
         help="path to config file",
@@ -251,7 +256,7 @@ if __name__ == "__main__":
 
 
     args = parser.parse_args()
-    with open(args.config_path) as f:
+    with open(args.config) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
     main(args, config)

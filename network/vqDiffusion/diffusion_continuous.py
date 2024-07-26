@@ -455,7 +455,8 @@ class GaussianDiffusion2D(Module):
     @torch.no_grad()
     def sample(self, batch_size = 16):
         seq_length, channels = self.seq_length, self.channels
-        sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
+        # sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
+        sample_fn = self.ddim_sample
         return sample_fn(batch_size)
 
     @torch.no_grad()

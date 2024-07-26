@@ -49,15 +49,13 @@ class VQDiffusion(nn.Module):
             else:
                 unet_channels = seq_length
                 unet_out_dim = seq_length
-            
-        
+                    
         self.unet = Unet2D(
                             dim = 64,
                             dim_mults = (1, 2, 4, 8),
                             channels = unet_channels,
                             out_dim= unet_out_dim
                             )
-
         
         if diffusion_type == 'VQ_Official':
             self.diffusion = Diffusion_VQ_Official(
@@ -69,7 +67,6 @@ class VQDiffusion(nn.Module):
                                             timesteps = time_steps, sampling_timesteps = sampling_timesteps,vocab_size = codebook_size,
                                             distribute_dim = distribute_dim
                                             )
-
         
         diffusion_resume_path = config['architecture']['diffusion']['resume_path']
         if not diffusion_resume_path is None:
@@ -77,8 +74,8 @@ class VQDiffusion(nn.Module):
                 self.diffusion.load_state_dict(torch.load(diffusion_resume_path))
                 self.logger.info(f"diffusion loaded weight from {diffusion_resume_path}")
         
-        freeze_weights = config['architecture']['diffusion']['freeze_weights']
-        if not freeze_weights:
+        freeze_weights = config['architecture']['diffusion']['freeze_weights'] or not config['architecture']['diffusion']['train_diffusion']
+        if freeze_weights:
             for param in self.diffusion.parameters():
                 param.requires_grad = False
             logger.info(f"Diffusion model is freezed")
@@ -93,7 +90,7 @@ class VQDiffusion(nn.Module):
         Returns:
             torch.tensor: the flattened quantized encodings
         """
-        print('x:', x.shape) # x: torch.Size([bs, c, 256, 256])
+        # print('x:', x.shape) # x: torch.Size([bs, c, 256, 256])
         codebook_mapping, codebook_indices, q_loss = self.vqvae.encode(x) 
         # print('codebook_mapping:', codebook_mapping.shape) # codebook_mapping: torch.Size([bs, 256, 16, 16])
         # print('codebook_indices:', codebook_indices.shape) # codebook_indices: torch.Size([bs*256])

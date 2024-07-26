@@ -11,13 +11,13 @@ import tqdm
 
 from utils.utils import print_gpu_memory_usage
 
-class VQDiffusionTrainer:
+class VQDiffusionWorker:
     def __init__(
         self,
         model: nn.Module,
-        run: Run,
+        run: Run = None,
         experiment_dir: str = "experiments",
-        device: str = "cuda",
+        device: str = "cpu",
         logger = None,
         save_img_dir = None,
         args = None,
@@ -29,6 +29,8 @@ class VQDiffusionTrainer:
         beta1 = config['trainer']['diffusion']['beta1']
         beta2 = config['trainer']['diffusion']['beta2']
         
+        self.num_codebook_vectors = config['architecture']['vqvae']['num_codebook_vectors']
+        self.seq_len = config['architecture']['vqvae']['latent_channels']
 
         self.vqdiffusion = model
         self.run = run
@@ -43,9 +45,11 @@ class VQDiffusionTrainer:
         self.vqdiffusion.to(device)
         self.device = device
 
-        self.optim = self.configure_optimizers(
-            learning_rate=learning_rate, beta1=beta1, beta2=beta2
-        )
+        train_diffusion = config['architecture']['diffusion']['train_diffusion']
+        if train_diffusion:
+            self.optim = self.configure_optimizers(
+                learning_rate=learning_rate, beta1=beta1, beta2=beta2
+            )
 
     def configure_optimizers(
         self, learning_rate: float = 4.5e-06, beta1: float = 0.9, beta2: float = 0.95

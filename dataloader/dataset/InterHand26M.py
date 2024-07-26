@@ -122,6 +122,14 @@ class InterHand26M(torch.utils.data.Dataset):
             hand_bbox = np.array(hand_bbox_list, dtype=np.int32)
             ### crop hand based on hand_bbox
             x1, y1, x2, y2 = hand_bbox
+            h, w = img.shape[:2]
+            
+            margin = 15
+            x1 = max(0, x1 - margin)
+            y1 = max(0, y1 - margin)
+            x2 = min(w, x2 + margin)
+            y2 = min(h, y2 + margin)
+
             hand_img = img[y1:y2, x1:x2, :]
         except:
             self.logger.info(f'Error: {img_path}, hand_bbox is not valid')

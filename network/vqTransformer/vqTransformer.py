@@ -50,8 +50,8 @@ class VQTransformer(nn.Module):
                 self.transformer.load_state_dict(torch.load(transformer_resume_path))
                 self.logger.info(f"Transformer loaded weight from {transformer_resume_path}")
         
-        freeze_weights = config['architecture']['transformer']['freeze_weights']
-        if not freeze_weights:
+        freeze_weights = config['architecture']['transformer']['freeze_weights'] or not config['architecture']['transformer']['train_diffusion']
+        if freeze_weights:
             for param in self.transformer.parameters():
                 param.requires_grad = False
             logger.info(f"Transformer model is freezed")
