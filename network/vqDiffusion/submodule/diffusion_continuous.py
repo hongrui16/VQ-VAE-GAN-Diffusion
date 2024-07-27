@@ -18,7 +18,7 @@ import os, sys
 
 
 if __name__ == '__main__':
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+    sys.path.append(os.path.join(os.path.dirname(__file__), '../..', '..'))
     
 
 from network.vqDiffusion.submodule.unet2d import Unet2D
@@ -316,8 +316,30 @@ class GaussianDiffusion2D(Module):
     def gaussian_to_indices(self, gaussian):
         if self.distruibute_dim == 1:
             gaussian = gaussian.permute(0, 2, 1)
-        indices = torch.argmin(torch.cdist(gaussian, self.gaussian_lookup_table), dim=-1)
-        return indices
+        # indices = torch.argmin(torch.cdist(gaussian, self.gaussian_lookup_table), dim=-1)
+        # return indices
+
+        # 确保输入的高斯分布向量形状为 [batch_size, num_indices, gaussian_dim]
+        batch_size, num_indices, gaussian_dim = gaussian.shape
+
+        # 展平gaussian为 [batch_size * num_indices, gaussian_dim]
+        gaussian_flat = gaussian.view(-1, gaussian_dim)
+
+        # 显式计算距离
+        distances = (
+            torch.sum(gaussian_flat**2, dim=1, keepdim=True)
+            + torch.sum(self.gaussian_lookup_table**2, dim=1)
+            - 2 * torch.matmul(gaussian_flat, self.gaussian_lookup_table.t())
+        )
+
+        # 找到距离最近的索引
+        closest_indices = torch.argmin(distances, dim=1)
+
+        # 将索引还原为原始形状 [batch_size, num_indices]
+        closest_indices = closest_indices.view(batch_size, num_indices)
+
+        return closest_indices
+
 
 
     def predict_start_from_noise(self, x_t, t, noise):
@@ -548,7 +570,7 @@ class GaussianDiffusion2D(Module):
         # predict and take gradient step
         # print('x_self_cond:', x_self_cond)
         # print('t', t)
-        print('x:', x.shape)
+        # print('x:', x.shape)
         model_out = self.model(x, x_self_cond, t)
         print('model_out:', model_out.shape)
         print('noise:', noise.shape)
@@ -576,8 +598,8 @@ class GaussianDiffusion2D(Module):
 
 if __name__ == '__main__':
 
-    seq_length = 8
-    codebook_size = 16
+    seq_length = 256
+    codebook_size = 1204
     bs = 1
     timesteps = 10
     sampling_timesteps = 5
@@ -585,35 +607,47 @@ if __name__ == '__main__':
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     distribute_dim = -1 # -1 or 1
+    
+    indices_to_dist_fn = 'lookup_table' # 'one_hot' or 'lookup_table'
+    gaussian_dim = 512
 
-    if distribute_dim == 1:
-        model = Unet2D(
-            dim = 64,
-            dim_mults = (1, 2, 4, 8),
-            channels = codebook_size,
-            out_dim= codebook_size
-        )
+    if indices_to_dist_fn == 'one_hot':
+        if distribute_dim == 1:
+            unet_channels = codebook_size
+            unet_out_dim = codebook_size
+        else:
+            unet_channels = seq_length
+            unet_out_dim = seq_length
     else:
-        model = Unet2D(
-        dim = 64,
-        dim_mults = (1, 2, 4, 8),
-        channels = seq_length,
-        out_dim= seq_length
-        )
+        if distribute_dim == 1:
+            unet_channels = gaussian_dim
+            unet_out_dim = gaussian_dim
+        else:
+            unet_channels = seq_length
+            unet_out_dim = seq_length
+
+    unet = Unet2D(
+                        dim = 128,
+                        dim_mults = (1, 2, 4, 8),
+                        channels = unet_channels,
+                        out_dim= unet_out_dim
+                        )
 
 
-    model.to(device)
-    diffusion = GaussianDiffusion2D(model, seq_length = seq_length, timesteps = timesteps, 
-                                    sampling_timesteps = sampling_timesteps, vocab_size = codebook_size, distribute_dim = distribute_dim)
+    unet.to(device)
+    diffusion = GaussianDiffusion2D(unet, seq_length = seq_length, timesteps = timesteps, 
+                                    sampling_timesteps = sampling_timesteps, vocab_size = codebook_size, 
+                                    distribute_dim = distribute_dim, gaussian_dim = gaussian_dim,
+                                    indices_to_dist_fn = indices_to_dist_fn)
 
     diffusion.to(device)
 
     input_indices = torch.randint(0, codebook_size, (bs, seq_length), device= device)  # 示例离散表示，长度为16
 
-    print('input_indices:', input_indices)
+    # print('input_indices:', input_indices)
     out = diffusion(input_indices)
     loss = out['loss']
     print('loss:', loss)    
 
     sampling_indices = diffusion.sample(batch_size = 1)
-    print('sampling_indices:', sampling_indices)
+    # print('sampling_indices:', sampling_indices)

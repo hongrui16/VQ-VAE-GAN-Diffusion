@@ -21,7 +21,7 @@ from torch.cuda.amp import autocast
 import os, sys
 
 if __name__ == '__main__':
-    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+    sys.path.append(os.path.join(os.path.dirname(__file__), '../..', '..'))
 
 from network.vqDiffusion.submodule.unet2d import Unet2D
 

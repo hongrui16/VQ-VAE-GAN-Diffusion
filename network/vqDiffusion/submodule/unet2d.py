@@ -219,7 +219,7 @@ class Unet2D(Module):
         init_dim = None,
         out_dim = None,
         dim_mults=(1, 2, 4, 8),
-        channels = 3,
+        channels = 3, ### input channels
         dropout = 0.,
         self_condition = False,
         learned_variance = False,
@@ -236,9 +236,9 @@ class Unet2D(Module):
 
         self.channels = channels
         self.self_condition = self_condition
-        
+        print('channels:', channels)
         input_channels = channels * (2 if self_condition else 1)
-
+        print('input_channels:', input_channels)
         init_dim = default(init_dim, dim)
         self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding = 3)
 
@@ -305,8 +305,8 @@ class Unet2D(Module):
         self.final_conv = nn.Conv1d(init_dim, self.out_dim, 1)
 
     def forward(self, x, x_self_cond = None, time = None):
-        # print('0 x shape:', x.shape)
-        # print('0 t shape:', time.shape)
+        print('0 x shape:', x.shape)
+        print('0 t shape:', time.shape)
         if self.self_condition:
             x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
             x = torch.cat((x_self_cond, x), dim = 1)
@@ -317,8 +317,8 @@ class Unet2D(Module):
         t = self.time_mlp(time)
 
         h = []
-        # print('1 x shape:', x.shape)
-        # print('1 t shape:', t.shape)
+        print('1 x shape:', x.shape)
+        print('1 t shape:', t.shape)
         for block1, block2, attn, downsample in self.downs:
             x = block1(x, t)
             # print('2 x shape:', x.shape)

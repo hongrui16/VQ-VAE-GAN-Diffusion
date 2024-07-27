@@ -32,6 +32,7 @@ class VQDiffusion(nn.Module):
         codebook_size = config['architecture']['vqvae']['num_codebook_vectors']
         indices_to_dist_fn = config['architecture']['diffusion']['indices_to_dist_fn']
         gaussian_dim = config['architecture']['diffusion']['gaussian_dim']
+        distribute_dim = config['architecture']['diffusion']['distribute_dim']
 
         assert diffusion_type in ['VQ_Official', 'Continuous'], "Diffusion type should be either 'VQ_Official' or 'Continuous'"
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
@@ -40,32 +41,31 @@ class VQDiffusion(nn.Module):
         self.vqvae = vqvae
         self.logger = logger
 
-        distribute_dim = 1 # -1 or 1
 
         if diffusion_type == 'VQ_Official':
-            unet_channels = codebook_size
-            unet_out_dim = codebook_size - 1
+            unet_input_channels = codebook_size
+            unet_output_channels = codebook_size - 1
         else:
             if indices_to_dist_fn == 'one_hot':
                 if distribute_dim == 1:
-                    unet_channels = codebook_size
-                    unet_out_dim = codebook_size
+                    unet_input_channels = codebook_size
+                    unet_output_channels = codebook_size
                 else:
-                    unet_channels = seq_length
-                    unet_out_dim = seq_length
+                    unet_input_channels = seq_length
+                    unet_output_channels = seq_length
             else:
                 if distribute_dim == 1:
-                    unet_channels = seq_length
-                    unet_out_dim = seq_length
+                    unet_input_channels = gaussian_dim
+                    unet_output_channels = gaussian_dim
                 else:
-                    unet_channels = gaussian_dim
-                    unet_out_dim = gaussian_dim
+                    unet_input_channels = seq_length
+                    unet_output_channels = seq_length
 
         self.unet = Unet2D(
                             dim = 64,
                             dim_mults = (1, 2, 4, 8),
-                            channels = unet_channels,
-                            out_dim= unet_out_dim
+                            channels = unet_input_channels,
+                            out_dim= unet_output_channels
                             )
         
         if diffusion_type == 'VQ_Official':

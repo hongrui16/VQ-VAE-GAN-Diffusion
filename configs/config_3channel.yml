@@ -37,6 +37,7 @@ architecture:
     freeze_weights: False
     indices_to_dist_fn: 'lookup_table' # 'lookup_table' or 'one_hot'
     gaussian_dim: 512
+    distribute_dim: -1 # probability distribution dim, -1 for last dimension, 1 for second dimension
 
 
 dataset:
@@ -53,7 +54,7 @@ dataset:
 
 
 trainer:  
-  num_epochs: 50
+  num_epochs: 65
   log_dir: "log"
   
   vqvae:
