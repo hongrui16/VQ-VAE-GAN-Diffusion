@@ -327,13 +327,13 @@ class GaussianDiffusion2D(Module):
 
         # 显式计算距离
         distances = (
-            torch.sum(gaussian_flat**2, dim=1, keepdim=True)
-            + torch.sum(self.gaussian_lookup_table**2, dim=1)
+            torch.sum(gaussian_flat**2, dim=-1, keepdim=True)
+            + torch.sum(self.gaussian_lookup_table**2, dim=-1)
             - 2 * torch.matmul(gaussian_flat, self.gaussian_lookup_table.t())
         )
 
         # 找到距离最近的索引
-        closest_indices = torch.argmin(distances, dim=1)
+        closest_indices = torch.argmin(distances, dim=-1)
 
         # 将索引还原为原始形状 [batch_size, num_indices]
         closest_indices = closest_indices.view(batch_size, num_indices)
@@ -400,16 +400,6 @@ class GaussianDiffusion2D(Module):
             if clip_x_start and rederive_pred_noise:
                 pred_noise = self.predict_noise_from_start(x, t, x_start)
 
-        elif self.objective == 'pred_x0':
-            x_start = model_output
-            x_start = maybe_clip(x_start)
-            pred_noise = self.predict_noise_from_start(x, t, x_start)
-
-        elif self.objective == 'pred_v':
-            v = model_output
-            x_start = self.predict_start_from_v(x, t, v)
-            x_start = maybe_clip(x_start)
-            pred_noise = self.predict_noise_from_start(x, t, x_start)
 
         return ModelPrediction(pred_noise, x_start)
 
@@ -572,8 +562,8 @@ class GaussianDiffusion2D(Module):
         # print('t', t)
         # print('x:', x.shape)
         model_out = self.model(x, x_self_cond, t)
-        print('model_out:', model_out.shape)
-        print('noise:', noise.shape)
+        # print('model_out:', model_out.shape)
+        # print('noise:', noise.shape)
         loss = F.mse_loss(model_out, noise, reduction = 'none')
         loss = reduce(loss, 'b ... -> b', 'mean')
 
