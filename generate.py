@@ -119,7 +119,7 @@ def main(args, config):
     )
     logger.info(f'Initializing {model_name.lower} Worker')
     n_images = 34
-    vqgan_vqvae_worker.generate_images(n_images = n_images, random_indices=True)
+    vqgan_vqvae_worker.generate_images(n_images = n_images, dataloader = val_dataloader, random_indices=False)
     logger.info(f'Generated {n_images} images')
 
 

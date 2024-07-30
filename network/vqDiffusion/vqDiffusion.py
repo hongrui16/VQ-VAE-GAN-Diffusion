@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import os
 
 from network.vqDiffusion.submodule.diffusion_vq_official import Diffusion_VQ_Official
-from network.vqDiffusion.submodule.diffusion_continuous import GaussianDiffusion2D
+from network.vqDiffusion.submodule.diffusion_gaussian import GaussianDiffusion2D
 from network.vqDiffusion.submodule.unet2d import Unet2D
 
 
@@ -24,15 +24,16 @@ class VQDiffusion(nn.Module):
         
     ):
         super().__init__()
-        diffusion_type = config['architecture']['diffusion']['diffusion_type']
-        time_steps = config['architecture']['diffusion']['diffusion_steps']
-        sampling_timesteps = config['architecture']['diffusion']['sampling_steps']
-        objective = config['architecture']['diffusion']['objective']
         seq_length = config['architecture']['vqvae']['latent_channels']
         codebook_size = config['architecture']['vqvae']['num_codebook_vectors']
-        indices_to_dist_fn = config['architecture']['diffusion']['indices_to_dist_fn']
-        gaussian_dim = config['architecture']['diffusion']['gaussian_dim']
-        distribute_dim = config['architecture']['diffusion']['distribute_dim']
+
+        diffusion_type = config['architecture']['vqdiffusion']['diffusion_type']
+        time_steps = config['architecture']['vqdiffusion']['diffusion_steps']
+        sampling_timesteps = config['architecture']['vqdiffusion']['sampling_steps']
+        objective = config['architecture']['vqdiffusion']['objective']
+        indices_to_dist_fn = config['architecture']['vqdiffusion']['indices_to_dist_fn']
+        gaussian_dim = config['architecture']['vqdiffusion']['gaussian_dim']
+        distribute_dim = config['architecture']['vqdiffusion']['distribute_dim']
 
         assert diffusion_type in ['VQ_Official', 'Continuous'], "Diffusion type should be either 'VQ_Official' or 'Continuous'"
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
@@ -80,17 +81,17 @@ class VQDiffusion(nn.Module):
                                             indices_to_dist_fn = indices_to_dist_fn,
                                             )
         
-        diffusion_resume_path = config['architecture']['diffusion']['resume_path']
+        diffusion_resume_path = config['architecture']['vqdiffusion']['resume_path']
         if not diffusion_resume_path is None:
             if os.path.exists(diffusion_resume_path):
                 self.diffusion.load_state_dict(torch.load(diffusion_resume_path))
                 self.logger.info(f"diffusion loaded weight from {diffusion_resume_path}")
         
-        freeze_weights = config['architecture']['diffusion']['freeze_weights'] or not config['architecture']['diffusion']['train_diffusion']
+        freeze_weights = config['architecture']['vqdiffusion']['freeze_weights'] or not config['architecture']['vqdiffusion']['train_diffusion']
         if freeze_weights:
             for param in self.diffusion.parameters():
                 param.requires_grad = False
-            logger.info(f"Diffusion model is freezed")
+            logger.info(f"vqdiffusion model is freezed")
 
     @torch.no_grad()
     def encode_to_z(self, x: torch.tensor) -> torch.tensor:
@@ -134,7 +135,7 @@ class VQDiffusion(nn.Module):
 
     def forward(self, x:torch.Tensor) -> torch.Tensor:
         """
-        transformer model forward pass 
+        vqdiffusion model forward pass 
 
         Args:
             x (torch.tensor): Batch of images
@@ -152,7 +153,7 @@ class VQDiffusion(nn.Module):
         self,
         batch_size: int = 1,
     ) -> torch.Tensor:
-        """Generating sample indices from the transformer
+        """Generating sample indices from the vqdiffusion
 
         Args:
             x (torch.Tensor): the batch of images

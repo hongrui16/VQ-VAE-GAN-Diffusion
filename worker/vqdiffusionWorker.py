@@ -26,9 +26,9 @@ class VQDiffusionWorker:
         config = None,
     ):
         model_name = config['architecture']['model_name']
-        learning_rate = config['trainer']['diffusion']['learning_rate']
-        beta1 = config['trainer']['diffusion']['beta1']
-        beta2 = config['trainer']['diffusion']['beta2']
+        learning_rate = config['trainer']['vqdiffusion']['learning_rate']
+        beta1 = config['trainer']['vqdiffusion']['beta1']
+        beta2 = config['trainer']['vqdiffusion']['beta2']
         
         self.num_codebook_vectors = config['architecture']['vqvae']['num_codebook_vectors']
         self.seq_len = config['architecture']['vqvae']['latent_channels']
@@ -47,8 +47,8 @@ class VQDiffusionWorker:
         self.vqdiffusion.to(device)
         self.device = device
 
-        train_diffusion = config['architecture']['diffusion']['train_diffusion']
-        if train_diffusion:
+        train_vqdiffusion = config['architecture']['vqdiffusion']['train_vqdiffusion']
+        if train_vqdiffusion:
             self.optim = self.configure_optimizers(
                 learning_rate=learning_rate, beta1=beta1, beta2=beta2
             )
@@ -142,7 +142,7 @@ class VQDiffusionWorker:
     
     def generate_images(self, n_images: int = 4, epoch = -1):
 
-        self.logger.info(f"{self.model_name} Transformer Generating {n_images} images...")
+        self.logger.info(f"{self.model_name} vqdiffusion Generating {n_images} images...")
         
         self.vqdiffusion.eval()
 
@@ -151,6 +151,10 @@ class VQDiffusionWorker:
             for i in range(n_images):
                 sample_indices = self.vqdiffusion.sample(n_images)
                 sampled_imgs = self.vqdiffusion.z_to_image(sample_indices)
+                sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
+                sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
+
+
                 torchvision.utils.save_image(
                     sampled_imgs,
                     os.path.join(self.save_img_dir, f"{self.model_name}Trans_epoch{epoch:03d}_{i}.jpg"),

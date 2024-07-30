@@ -64,6 +64,7 @@ class GaussianDiffusionWorker(object):
         train_lr = 1e-4,
         adam_betas = (0.9, 0.99),
         experiment_dir: str = "experiments",
+        save_img_dir: str = "samples",
         amp = True,
         mixed_precision_type = 'fp16',
         split_batches = True,
@@ -128,11 +129,11 @@ class GaussianDiffusionWorker(object):
         self.results_folder = experiment_dir
         os.makedirs(self.results_folder, exist_ok = True)
 
-        self.save_img_folder = os.path.join(self.results_folder, 'samples')
+        self.save_img_folder = save_img_dir
         os.makedirs(self.save_img_folder, exist_ok = True)
 
 
-        self.global_step = 0
+        self.step = 0
 
         ema_decay = 0.9999,
         ema_update_every = 10
@@ -151,6 +152,10 @@ class GaussianDiffusionWorker(object):
             'model': self.accelerator.get_state_dict(self.model),
             'opt': self.opt.state_dict(),
         }
+
+        if self.accelerator.is_main_process:
+            data['ema'] = self.ema.state_dict()
+
 
         torch.save(data, os.path.join(self.results_folder, f'model.pt'))
 
@@ -189,15 +194,15 @@ class GaussianDiffusionWorker(object):
                         self.ema.update()
 
             
-                if self.global_step % self.save_step == 0:
+                if self.step % self.save_step == 0:
                     loginfo =f"Epoch: {epoch+1}/{epochs} | Batch: {index}/{len(dataloader)} | Loss : {loss.item():.4f}"
                     # Log the information
                     self.logger.info(loginfo)
 
 
 
-                self.global_step += 1
-                if self.args.debug:
+                self.step += 1
+                if self.args.debug and self.step > 100:
                     break
 
             self.generate_images(epoch = epoch)
@@ -212,14 +217,19 @@ class GaussianDiffusionWorker(object):
     def generate_images(self, n_images: int = 1, epoch = -1, generate_bs = 4):
 
         self.logger.info(f"gaussianDiffusion Generating {n_images} images...")
-        
-        self.model.eval()
+        # Use EMA model for generation if available
+        if hasattr(self, 'ema'):
+            model_to_use = self.ema.ema_model
+        else:
+            model_to_use = self.model
 
-        self.model.to(self.device)
+        model_to_use.eval()
+        model_to_use.to(self.device)
+
         with torch.no_grad():
             for i in range(n_images):
                 random_imgs = torch.rand(generate_bs, self.img_size, self.img_size).to(self.device)
-                sampled_imgs = self.model.sample(generate_bs, random_imgs)
+                sampled_imgs = model_to_use.sample(generate_bs, random_imgs)
                 sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
                 sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
                 if self.input_dim == 3:

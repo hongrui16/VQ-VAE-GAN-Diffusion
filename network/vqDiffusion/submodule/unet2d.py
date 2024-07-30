@@ -233,12 +233,12 @@ class Unet2D(Module):
         super().__init__()
 
         # determine dimensions
-
+        self.input_dim = 3 # 2D input [bs, h, w]
         self.channels = channels
         self.self_condition = self_condition
-        print('channels:', channels)
+        # print('channels:', channels)
         input_channels = channels * (2 if self_condition else 1)
-        print('input_channels:', input_channels)
+        # print('input_channels:', input_channels)
         init_dim = default(init_dim, dim)
         self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding = 3)
 

@@ -48,11 +48,11 @@ def load_mnist(
 
     if split ==  'train':
         # Reduced set for faster training
-        mnist_data_reduced = torch.utils.data.Subset(mnist_data, list(range(0, 800)))
+        mnist_data_reduced = torch.utils.data.Subset(mnist_data, list(range(0, 40000)))
         shuffle = True
         drop_last = True
     else:
-        mnist_data_reduced = torch.utils.data.Subset(mnist_data, list(range(0, 200)))
+        mnist_data_reduced = torch.utils.data.Subset(mnist_data, list(range(0, 5000)))
         shuffle = False
         drop_last = False
 

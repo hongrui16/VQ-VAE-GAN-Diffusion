@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --partition=contrib-gpuq                    # need to set 'gpuq' or 'contrib-gpuq'  partition
 #SBATCH --qos=gpu                           # need to select 'gpu' QOS or other relvant QOS
-#SBATCH --job-name=vqdiffusion                   # vqgan, vqvae, vqdiffusion
+#SBATCH --job-name=gaussiandiffusion                   # vqgan, vqvae, vqdiffusion, gaussiandiffusion
 #SBATCH --output=/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/%u/%x-%N-%j.out   # Output file
 #SBATCH --error=/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/%u/%x-%N-%j.err    # Error file
 #SBATCH --nodes=1
