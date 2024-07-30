@@ -292,10 +292,10 @@ class GaussianDiffusion2D(Module):
 
         if objective == 'pred_noise':
             loss_weight = torch.ones_like(snr)
-        elif objective == 'pred_x0':
-            loss_weight = snr
-        elif objective == 'pred_v':
-            loss_weight = snr / (snr + 1)
+        # elif objective == 'pred_x0':
+        #     loss_weight = snr
+        # elif objective == 'pred_v':
+        #     loss_weight = snr / (snr + 1)
 
         register_buffer('loss_weight', loss_weight)
 
@@ -421,7 +421,7 @@ class GaussianDiffusion2D(Module):
 
     @torch.no_grad()
     def p_sample(self, x, t: int, x_self_cond = None, clip_denoised = True):
-        b, *_, device = *x.shape, x.device
+        b = x.shape[0]
         batched_times = torch.full((b,), t, device = x.device, dtype = torch.long)
         model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
         noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0

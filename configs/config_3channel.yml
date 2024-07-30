@@ -61,7 +61,7 @@ dataset:
 
 
 trainer:  
-  num_epochs: 65
+  num_epochs: 70
   log_dir: "log"
   
   vqvae:

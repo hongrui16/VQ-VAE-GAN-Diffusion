@@ -82,8 +82,15 @@ class GaussianDiffusionWorker(object):
             mixed_precision = mixed_precision_type if amp else 'no'
         )
 
-        self.img_size = config['architecture']['gaussiandiffusion']['img_size']
-        train_gaussiandiffusion = config['architecture']['gaussiandiffusion']['train_gaussiandiffusion']
+        if 'img_size' in config['architecture']['gaussiandiffusion']:
+            self.img_size = config['architecture']['gaussiandiffusion']['img_size']  
+        else:
+            self.img_size = 256
+        
+        if 'train_gaussiandiffusion' in config['architecture']['gaussiandiffusion']:
+            train_gaussiandiffusion = config['architecture']['gaussiandiffusion']['train_gaussiandiffusion']
+        else:
+            train_gaussiandiffusion = True
 
         self.logger = logger
         self.model = diffusion_model
@@ -97,13 +104,13 @@ class GaussianDiffusionWorker(object):
         assert has_int_squareroot(num_samples), 'number of samples must have an integer square root'
         self.num_samples = num_samples
 
-        self.batch_size = config['dataset']['batch_size']
+        self.batch_size = config['dataset']['batch_size'] if 'batch_size' in config['dataset'] else 1
         self.gradient_accumulate_every = gradient_accumulate_every
         self.max_grad_norm = max_grad_norm
 
         
         if train_gaussiandiffusion:
-            num_iters_per_epoch = len(train_dataset)//config['dataset']['batch_size']
+            num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:
                 self.save_step = 1
@@ -135,7 +142,7 @@ class GaussianDiffusionWorker(object):
 
         self.step = 0
 
-        ema_decay = 0.9999,
+        ema_decay = 0.9999
         ema_update_every = 10
         if self.accelerator.is_main_process:
             self.ema = EMA(diffusion_model, beta=ema_decay, update_every=ema_update_every)
@@ -168,7 +175,7 @@ class GaussianDiffusionWorker(object):
 
 
     def train(self,
-        dataloader: torch.utils.data.DataLoader,
+        dataloader,
         epochs: int = 1,):
 
         self.model.train()
@@ -185,7 +192,7 @@ class GaussianDiffusionWorker(object):
                 out = self.model(imgs)
                 loss = out['loss']
                 
-                loss.backward()
+                self.accelerator.backward(loss)
                 
                 if (index + 1) % self.gradient_accumulate_every == 0:
                     self.accelerator.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
