@@ -54,15 +54,13 @@ def num_to_groups(num, divisor):
     return arr
 
 
-class GaussianDiffusionWorker(object):
+class GaussianDiffusion2DWorker(object):
     def __init__(
         self,
         diffusion_model,
         device = 'cpu',
         train_dataset: Dataset = None,
         gradient_accumulate_every = 1,
-        train_lr = 1e-4,
-        adam_betas = (0.9, 0.99),
         experiment_dir: str = "experiments",
         save_img_dir: str = "samples",
         amp = True,
@@ -81,16 +79,17 @@ class GaussianDiffusionWorker(object):
             split_batches = split_batches,
             mixed_precision = mixed_precision_type if amp else 'no'
         )
-
-        if 'img_size' in config['architecture']['gaussiandiffusion']:
-            self.img_size = config['architecture']['gaussiandiffusion']['img_size']  
+        model_name = config['architecture']['model_name']
+        if 'img_size' in config['architecture'][model_name]:
+            self.img_size = config['architecture'][model_name]['img_size']  
         else:
             self.img_size = 256
         
-        if 'train_gaussiandiffusion' in config['architecture']['gaussiandiffusion']:
-            train_gaussiandiffusion = config['architecture']['gaussiandiffusion']['train_gaussiandiffusion']
+        if 'train_model' in config['architecture'][model_name]:
+            train_model = config['architecture'][model_name]['train_model']
         else:
-            train_gaussiandiffusion = True
+            train_model = True
+
 
         self.logger = logger
         self.model = diffusion_model
@@ -104,12 +103,12 @@ class GaussianDiffusionWorker(object):
         assert has_int_squareroot(num_samples), 'number of samples must have an integer square root'
         self.num_samples = num_samples
 
-        self.batch_size = config['dataset']['batch_size'] if 'batch_size' in config['dataset'] else 1
+        self.batch_size = config['trainer'][model_name]['batch_size'] 
         self.gradient_accumulate_every = gradient_accumulate_every
         self.max_grad_norm = max_grad_norm
 
         
-        if train_gaussiandiffusion:
+        if train_model:
             num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:
@@ -128,7 +127,8 @@ class GaussianDiffusionWorker(object):
             self.logger.info(f"Save step set to {self.save_step}")          
 
             # optimizer
-
+            train_lr = config['trainer'][model_name]['learning_rate']
+            adam_betas = config['trainer'][model_name]['adam_betas']
             self.opt = Adam(self.model.parameters(), lr = train_lr, betas = adam_betas)
 
         # for logging results in a folder periodically

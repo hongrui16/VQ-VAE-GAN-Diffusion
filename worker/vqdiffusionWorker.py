@@ -53,7 +53,8 @@ class VQDiffusionWorker:
                 learning_rate=learning_rate, beta1=beta1, beta2=beta2
             )
 
-            num_iters_per_epoch = len(train_dataset)//config['dataset']['batch_size']
+            self.batch_size = config['trainer'][model_name]['batch_size'] 
+            num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:
                 self.save_step = 1
@@ -170,7 +171,7 @@ class VQDiffusionWorker:
         # self.logger.info(f"Checkpoint saved at {checkpoint_dir}")
 
         # save transformer model only
-        weight_path = os.path.join(checkpoint_dir, 'diffusion.pt')
+        weight_path = os.path.join(checkpoint_dir, 'vqdiffusion.pt')
         if os.path.exists(weight_path):
             os.remove(weight_path)
         torch.save(self.vqdiffusion.diffusion.state_dict(), weight_path)

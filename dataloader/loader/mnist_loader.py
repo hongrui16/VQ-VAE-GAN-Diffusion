@@ -41,7 +41,7 @@ def load_mnist(
                 torchvision.transforms.Resize((image_size, image_size)),
                 torchvision.transforms.Grayscale(num_output_channels=1),
                 torchvision.transforms.ToTensor(),
-                # torchvision.transforms.Normalize((0.1307,), (0.3081,)),
+                torchvision.transforms.Normalize((0.5,), (0.5,)),
             ]
         ),
     )

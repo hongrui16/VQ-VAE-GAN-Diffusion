@@ -9,7 +9,7 @@ import torch.nn.functional as F
 import os
 
 from network.vqDiffusion.submodule.diffusion_vq_official import Diffusion_VQ_Official
-from network.vqDiffusion.submodule.diffusion_gaussian import GaussianDiffusion2D
+from network.vqDiffusion.submodule.diffusion_gaussian2d import GaussianDiffusion2D
 from network.vqDiffusion.submodule.unet2d import Unet2D
 
 

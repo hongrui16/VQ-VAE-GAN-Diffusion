@@ -10,13 +10,10 @@ from dataloader.loader.Oxford102Flower_loader import load_OxfordFlowers
 
 def load_dataloader(
     name: str = "mnist",
-    batch_size: int = 2,
-    image_size: int = 256,
-    num_workers: int = 4,
     split: str = 'train',
     logger=None,
-    save_path: str = None,
     config = None,
+    save_path: str = None,
 ) -> DataLoader:
     """Load the data loader for the given name.
 
@@ -30,6 +27,10 @@ def load_dataloader(
     Returns:
         torch.utils.data.DataLoader: The data loader.
     """
+    model_name = config['architecture']['model_name']
+    image_size = config['architecture'][model_name]['img_size']
+    batch_size = config['trainer'][model_name]['batch_size']
+    num_workers = config['trainer']['num_workers']
     # print(f"Loading {name} dataset")
     if name == "mnist":
         return load_mnist(

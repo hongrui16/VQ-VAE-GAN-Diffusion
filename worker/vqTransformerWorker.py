@@ -53,7 +53,9 @@ class VQTransformerWorker:
                 learning_rate=learning_rate, beta1=beta1, beta2=beta2
             )
 
-            num_iters_per_epoch = len(train_dataset)//config['dataset']['batch_size']
+
+            self.batch_size = config['trainer'][model_name]['batch_size'] 
+            num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:
                 self.save_step = 1

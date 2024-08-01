@@ -107,7 +107,9 @@ class VQGANVQVAEWorker:
             self.perceptual_loss_factor = perceptual_loss_factor
             self.rec_loss_factor = rec_loss_factor
 
-            num_iters_per_epoch = len(train_dataset)//config['dataset']['batch_size']
+
+            self.batch_size = config['trainer'][model_name]['batch_size'] 
+            num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:
                 self.save_step = 1
