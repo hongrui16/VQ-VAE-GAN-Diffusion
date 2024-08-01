@@ -21,14 +21,19 @@ class VQTransformer(nn.Module):
     ):
         super().__init__()
 
-        sos_token = config['architecture']['transformer']['sos_token']
-        block_size = config['architecture']['transformer']['block_size']
-        n_layer = config['architecture']['transformer']['n_layer']
-        n_head = config['architecture']['transformer']['n_head']
-        n_embd = config['architecture']['transformer']['n_embd']
-        pkeep = config['architecture']['transformer']['pkeep']
+        model_name = config['architecture']['model_name']
         vocab_size = config['architecture']['vqvae']['num_codebook_vectors']
+
+        sos_token = config['architecture'][model_name]['sos_token']
+        block_size = config['architecture'][model_name]['block_size']
+        n_layer = config['architecture'][model_name]['n_layer']
+        n_head = config['architecture'][model_name]['n_head']
+        n_embd = config['architecture'][model_name]['n_embd']
+        pkeep = config['architecture'][model_name]['pkeep']
         
+        transformer_resume_path = config['architecture'][model_name]['resume_path']
+        freeze_weights = config['architecture'][model_name]['freeze_weights'] 
+
         self.sos_token = sos_token
         self.device = device
         self.vqvae = vqvae
@@ -44,13 +49,11 @@ class VQTransformer(nn.Module):
 
         self.pkeep = pkeep
 
-        transformer_resume_path = config['architecture']['transformer']['resume_path']
         if not transformer_resume_path is None:
             if os.path.exists(transformer_resume_path):
                 self.transformer.load_state_dict(torch.load(transformer_resume_path))
                 self.logger.info(f"Transformer loaded weight from {transformer_resume_path}")
         
-        freeze_weights = config['architecture']['transformer']['freeze_weights'] or not config['architecture']['transformer']['train_diffusion']
         if freeze_weights:
             for param in self.transformer.parameters():
                 param.requires_grad = False

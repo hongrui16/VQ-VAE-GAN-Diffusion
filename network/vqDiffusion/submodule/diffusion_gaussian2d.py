@@ -210,7 +210,7 @@ class GaussianDiffusion2D(Module):
         super().__init__()
 
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
-        assert diffusion_type in ['vqdiffusion', 'gaussiandiffusion'], 'diffusion_type must be either vqdiffusion or gaussiandiffusion'
+        assert diffusion_type in ['vqdiffusion', 'gaussiandiffusion2d'], 'diffusion_type must be either vqdiffusion or gaussiandiffusion2d'
 
         self.input_dim = model.input_dim # 3 for 2d image, 4 for 3d image
 
@@ -284,7 +284,7 @@ class GaussianDiffusion2D(Module):
         register_buffer('posterior_mean_coef2', (1. - alphas_cumprod_prev) * torch.sqrt(alphas) / (1. - alphas_cumprod))
 
         if self.diffusion_type == 'vqdiffusion':
-            register_buffer('gaussian_lookup_table', torch.randn(self.codebook_size, gaussian_dim))
+            register_buffer('gaussian_lookup_table', torch.rand(self.codebook_size, gaussian_dim))
 
         # calculate loss weight
 

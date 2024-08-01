@@ -26,12 +26,15 @@ class VQDiffusionWorker:
         config = None,
     ):
         model_name = config['architecture']['model_name']
-        learning_rate = config['trainer']['vqdiffusion']['learning_rate']
-        beta1 = config['trainer']['vqdiffusion']['beta1']
-        beta2 = config['trainer']['vqdiffusion']['beta2']
+
         
         self.num_codebook_vectors = config['architecture']['vqvae']['num_codebook_vectors']
         self.seq_len = config['architecture']['vqvae']['latent_channels']
+
+        train_model = config['architecture'][model_name]['train_model']
+        learning_rate = config['trainer'][model_name]['learning_rate']
+        beta1 = config['trainer'][model_name]['beta1']
+        beta2 = config['trainer'][model_name]['beta2']
 
         self.vqdiffusion = model
         self.run = run
@@ -47,8 +50,7 @@ class VQDiffusionWorker:
         self.vqdiffusion.to(device)
         self.device = device
 
-        train_vqdiffusion = config['architecture']['vqdiffusion']['train_vqdiffusion']
-        if train_vqdiffusion:
+        if train_model:
             self.optim = self.configure_optimizers(
                 learning_rate=learning_rate, beta1=beta1, beta2=beta2
             )
@@ -86,6 +88,7 @@ class VQDiffusionWorker:
             for index, imgs in enumerate(tqdm_bar):
                 self.optim.zero_grad()
                 imgs = imgs.to(device=self.device)
+                # print('imgs.shape', imgs.shape)
                 loss = self.vqdiffusion(imgs)
                 
                 loss.backward()
@@ -141,7 +144,7 @@ class VQDiffusionWorker:
                 break
             
     
-    def generate_images(self, n_images: int = 4, epoch = -1):
+    def generate_images(self, n_images: int = 16, epoch = -1):
 
         self.logger.info(f"{self.model_name} vqdiffusion Generating {n_images} images...")
         
@@ -149,18 +152,17 @@ class VQDiffusionWorker:
 
         self.vqdiffusion = self.vqdiffusion.to(self.device)
         with torch.no_grad():
-            for i in range(n_images):
-                sample_indices = self.vqdiffusion.sample(n_images)
-                sampled_imgs = self.vqdiffusion.z_to_image(sample_indices)
-                sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
-                sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
+            sample_indices = self.vqdiffusion.sample(n_images)
+            sampled_imgs = self.vqdiffusion.z_to_image(sample_indices)
+            sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
+            sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
 
 
-                torchvision.utils.save_image(
-                    sampled_imgs,
-                    os.path.join(self.save_img_dir, f"{self.model_name}Trans_epoch{epoch:03d}_{i}.jpg"),
-                    nrow=4,
-                )
+            torchvision.utils.save_image(
+                sampled_imgs,
+                os.path.join(self.save_img_dir, f"{self.model_name}Trans_epoch{epoch:03d}.jpg"),
+                nrow=4,
+            )
     
     def save_checkpoint(self, checkpoint_dir: str):
         """Saves the vqgan model checkpoints"""

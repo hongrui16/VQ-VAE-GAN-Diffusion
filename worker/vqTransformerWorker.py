@@ -27,11 +27,13 @@ class VQTransformerWorker:
 
     ):
         model_name = config['architecture']['model_name']
-        learning_rate = config['trainer']['transformer']['learning_rate']
-        beta1 = config['trainer']['transformer']['beta1']
-        beta2 = config['trainer']['transformer']['beta2']
+
         self.num_codebook_vectors = config['architecture']['vqvae']['num_codebook_vectors']
         self.seq_len = config['architecture']['vqvae']['latent_channels']
+
+        learning_rate = config['trainer'][model_name]['learning_rate']
+        beta1 = config['trainer'][model_name]['beta1']
+        beta2 = config['trainer'][model_name]['beta2']
 
         self.vqTransModel = model
         self.run = run
@@ -47,8 +49,8 @@ class VQTransformerWorker:
         self.vqTransModel.to(device)
         self.device = device
 
-        train_diffusion = config['architecture']['transformer']['train_diffusion']
-        if train_diffusion:
+        train_model = config['architecture'][model_name]['train_model']
+        if train_model:
             self.optim = self.configure_optimizers(
                 learning_rate=learning_rate, beta1=beta1, beta2=beta2
             )
@@ -177,7 +179,7 @@ class VQTransformerWorker:
                 break
             
     
-    def generate_images(self, n_images: int = 5, epoch = -1, random_indices = False):
+    def generate_images(self, n_images: int = 16, epoch = -1, random_indices = False):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
         
@@ -185,19 +187,18 @@ class VQTransformerWorker:
 
         self.vqTransModel = self.vqTransModel.to(self.device)
         with torch.no_grad():
-            for i in range(n_images):
-                start_indices = torch.zeros((4, 0)).long().to(self.device)
-                sos_tokens = torch.ones(start_indices.shape[0], 1) * 0
-                sos_tokens = sos_tokens.long().to(self.device)
-                sample_indices = self.vqTransModel.sample(
-                    start_indices, sos_tokens, steps=256
-                )
-                sampled_imgs = self.vqTransModel.z_to_image(sample_indices)
-                torchvision.utils.save_image(
-                    sampled_imgs,
-                    os.path.join(self.save_img_dir, f"{self.model_name}_epoch{epoch:03d}_{i}.jpg"),
-                    nrow=4,
-                )
+            start_indices = torch.zeros((4, 0)).long().to(self.device)
+            sos_tokens = torch.ones(start_indices.shape[0], 1) * 0
+            sos_tokens = sos_tokens.long().to(self.device)
+            sample_indices = self.vqTransModel.sample(
+                start_indices, sos_tokens, steps=256
+            )
+            sampled_imgs = self.vqTransModel.z_to_image(sample_indices)
+            torchvision.utils.save_image(
+                sampled_imgs,
+                os.path.join(self.save_img_dir, f"{self.model_name}_epoch{epoch:03d}.jpg"),
+                nrow=4,
+            )
     
     def save_checkpoint(self, checkpoint_dir: str):
         """Saves the vqgan model checkpoints"""

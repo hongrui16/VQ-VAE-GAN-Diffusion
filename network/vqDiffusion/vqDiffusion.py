@@ -12,6 +12,7 @@ from network.vqDiffusion.submodule.diffusion_vq_official import Diffusion_VQ_Off
 from network.vqDiffusion.submodule.diffusion_gaussian2d import GaussianDiffusion2D
 from network.vqDiffusion.submodule.unet2d import Unet2D
 
+from network.vqDiffusion.submodule.diffusion_gaussian3d import VQGaussianDiffusion3DWrapper
 
 
 class VQDiffusion(nn.Module):
@@ -27,15 +28,17 @@ class VQDiffusion(nn.Module):
         seq_length = config['architecture']['vqvae']['latent_channels']
         codebook_size = config['architecture']['vqvae']['num_codebook_vectors']
 
-        diffusion_type = config['architecture']['vqdiffusion']['diffusion_type']
-        time_steps = config['architecture']['vqdiffusion']['diffusion_steps']
-        sampling_timesteps = config['architecture']['vqdiffusion']['sampling_steps']
-        objective = config['architecture']['vqdiffusion']['objective']
-        indices_to_dist_fn = config['architecture']['vqdiffusion']['indices_to_dist_fn']
-        gaussian_dim = config['architecture']['vqdiffusion']['gaussian_dim']
-        distribute_dim = config['architecture']['vqdiffusion']['distribute_dim']
+        model_name = config['architecture']['model_name']
+        diffusion_type = config['architecture'][model_name]['diffusion_type']
+        time_steps = config['architecture'][model_name]['diffusion_steps']
+        sampling_timesteps = config['architecture'][model_name]['sampling_steps']
+        indices_to_dist_fn = config['architecture'][model_name]['indices_to_dist_fn']
+        gaussian_dim = config['architecture'][model_name]['gaussian_dim']
+        distribute_dim = config['architecture'][model_name]['distribute_dim']
+        diffusion_resume_path = config['architecture'][model_name]['resume_path']
+        freeze_weights = config['architecture'][model_name]['freeze_weights']
 
-        assert diffusion_type in ['VQ_Official', 'Continuous'], "Diffusion type should be either 'VQ_Official' or 'Continuous'"
+        assert diffusion_type in ['VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'], "Diffusion type should be either 'VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'"
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
 
         self.device = device
@@ -46,7 +49,12 @@ class VQDiffusion(nn.Module):
         if diffusion_type == 'VQ_Official':
             unet_input_channels = codebook_size
             unet_output_channels = codebook_size - 1
-        else:
+            self.diffusion = Diffusion_VQ_Official(
+                                            self.unet, diffusion_step = time_steps, 
+                                            vocab_size = codebook_size,
+                                            seq_len = seq_length, device = device,)
+            
+        elif diffusion_type == 'gaussiandiffusion2d':
             if indices_to_dist_fn == 'one_hot':
                 if distribute_dim == 1:
                     unet_input_channels = codebook_size
@@ -61,37 +69,45 @@ class VQDiffusion(nn.Module):
                 else:
                     unet_input_channels = seq_length
                     unet_output_channels = seq_length
-
-        self.unet = Unet2D(
+            self.unet = Unet2D(
                             dim = 64,
                             dim_mults = (1, 2, 4, 8),
                             channels = unet_input_channels,
                             out_dim= unet_output_channels
                             )
         
-        if diffusion_type == 'VQ_Official':
-            self.diffusion = Diffusion_VQ_Official(
-                                            self.unet, diffusion_step = time_steps, 
-                                            vocab_size = codebook_size,
-                                            seq_len = seq_length, device = device,)
-        else:                
             self.diffusion = GaussianDiffusion2D(self.unet,  seq_length = seq_length,
                                             timesteps = time_steps, sampling_timesteps = sampling_timesteps,vocab_size = codebook_size,
                                             distribute_dim = distribute_dim, gaussian_dim = gaussian_dim, 
                                             indices_to_dist_fn = indices_to_dist_fn,
                                             )
         
-        diffusion_resume_path = config['architecture']['vqdiffusion']['resume_path']
+        elif diffusion_type == 'gaussiandiffusion3d':
+            assert distribute_dim == -1
+
+            self.diffusion = VQGaussianDiffusion3DWrapper(
+                            seq_length = seq_length,
+                            vocab_size = codebook_size,
+                            timesteps = time_steps,
+                            sampling_timesteps = sampling_timesteps,
+                            device=device,
+                            )
+        else:
+            raise ValueError(f"Diffusion type {diffusion_type} not supported")
+
+
+
         if not diffusion_resume_path is None:
             if os.path.exists(diffusion_resume_path):
                 self.diffusion.load_state_dict(torch.load(diffusion_resume_path))
                 self.logger.info(f"diffusion loaded weight from {diffusion_resume_path}")
         
-        freeze_weights = config['architecture']['vqdiffusion']['freeze_weights'] or not config['architecture']['vqdiffusion']['train_diffusion']
         if freeze_weights:
             for param in self.diffusion.parameters():
                 param.requires_grad = False
             logger.info(f"vqdiffusion model is freezed")
+
+        self.diffusion.to(device)
 
     @torch.no_grad()
     def encode_to_z(self, x: torch.tensor) -> torch.tensor:
@@ -162,8 +178,6 @@ class VQDiffusion(nn.Module):
             torch.Tensor: _description_
         """
         self.diffusion.eval()
-        if batch_size > 5:
-            batch_size = 5
         sampling_indices = self.diffusion.sample(batch_size=batch_size)
         return sampling_indices
 

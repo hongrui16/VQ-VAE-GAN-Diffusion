@@ -198,12 +198,13 @@ def main(args, config):
         sampling_timesteps = config['architecture'][model_name]['sampling_steps']
         model_base_dim = config['architecture'][model_name]['model_base_dim']
         gaussian_diffusion_3d = GaussianDiffusion3D(
-                                                image_size= img_size,
+                                                image_sizes = [img_size,img_size],
                                                 timesteps = timesteps,
                                                 in_channels = in_channels,
                                                 sampling_timesteps = sampling_timesteps,
                                                 base_dim= model_base_dim,
                                                 dim_mults=[2,4],
+                                                device = device,
                                                 )
         
         logging.info(f"{model_name} models created")

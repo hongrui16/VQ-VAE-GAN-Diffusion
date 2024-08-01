@@ -91,7 +91,7 @@ class VQGANVQVAEWorker:
                     self.discriminator.load_state_dict(torch.load(discrimator_weight_path))
                     self.logger.info(f"Discriminator loaded from {discrimator_weight_path}")
         
-        train_vqvae = config['architecture']['vqvae']['train_vqvae']
+        train_vqvae = config['architecture']['vqvae']['train_model']
         if train_vqvae:                     
             # Loss parameters
             self.perceptual_loss = lpips.LPIPS(net=perceptual_model).to(self.device)
@@ -372,7 +372,7 @@ class VQGANVQVAEWorker:
             if self.args.debug:
                 break
     
-    def generate_images(self, n_images: int = 5, dataloader = None, 
+    def generate_images(self, n_images: int = 16, dataloader = None, 
                                epoch = -1, random_indices = False):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
@@ -396,7 +396,7 @@ class VQGANVQVAEWorker:
                 torchvision.utils.save_image(
                     sampled_imgs,
                     os.path.join(self.save_img_dir, f"{self.model_name}_generated.jpg"),
-                    nrow=1,
+                    nrow=4,
                 )
             return
                 

@@ -19,18 +19,20 @@ from network.vqDiffusion.submodule.unet3d import Unet3D
 
 class GaussianDiffusion3D(nn.Module):
     def __init__(self,
-                 image_size,
+                 image_sizes,
                  in_channels,
                  time_embedding_dim=256,
                  timesteps=1000,
                  sampling_timesteps = 1000,
-                 base_dim=32,
-                 dim_mults= [1, 2, 4, 8]):
+                 base_dim=64,
+                 dim_mults= [1, 2, 4, 8],
+                 device	= 'cpu',
+                 ):
         
         super().__init__()
         self.timesteps=timesteps
         self.in_channels=in_channels
-        self.image_size=image_size
+        self.image_sizes=image_sizes
 
         betas=self._cosine_variance_schedule(timesteps)
 
@@ -44,6 +46,7 @@ class GaussianDiffusion3D(nn.Module):
         self.register_buffer("sqrt_one_minus_alphas_cumprod",torch.sqrt(1.-alphas_cumprod))
 
         self.model=Unet3D(timesteps,time_embedding_dim,in_channels,in_channels,base_dim,dim_mults)
+        self.device=device
 
     def forward(self,x,noise):
         # x:NCHW
@@ -55,10 +58,10 @@ class GaussianDiffusion3D(nn.Module):
 
     @torch.no_grad()
     def sampling(self,n_samples,clipped_reverse_diffusion=True,device="cuda"):
-        x_t=torch.randn((n_samples,self.in_channels,self.image_size,self.image_size)).to(device)
+        x_t=torch.randn((n_samples,self.in_channels,self.image_sizes[0],self.image_sizes[1])).to(self.device)
         for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling"):
-            noise=torch.randn_like(x_t).to(device)
-            t=torch.tensor([i for _ in range(n_samples)]).to(device)
+            noise=torch.randn_like(x_t).to(self.device)
+            t=torch.tensor([i for _ in range(n_samples)]).to(self.device)
 
             if clipped_reverse_diffusion:
                 x_t=self._reverse_diffusion_with_clip(x_t,t,noise)
@@ -134,3 +137,77 @@ class GaussianDiffusion3D(nn.Module):
 
         return mean+std*noise 
     
+
+class VQGaussianDiffusion3DWrapper(nn.Module):
+    def __init__(self,
+        seq_length = 256,
+        timesteps = 1000,
+        sampling_timesteps = None,
+        vocab_size = 1024,
+        gaussian_dim = 512,
+        indices_to_dist_fn = 'lookup_table',
+        time_embedding_dim = 256,
+        base_dim = 64,
+        device = 'cpu',
+        ):
+        
+        super().__init__()
+        self.device = device
+        image_sizes = [seq_length, gaussian_dim] 
+        self.diffusion=GaussianDiffusion3D(
+            image_sizes, 
+            1,
+            time_embedding_dim,
+            timesteps,
+            sampling_timesteps,
+            base_dim,
+            device = device)
+        self.codebook_size=vocab_size
+        
+        self.register_buffer('gaussian_lookup_table', torch.rand(self.codebook_size, gaussian_dim))
+        self.loss_fn=nn.MSELoss(reduction='mean')
+    
+    def indices_to_gaussian(self, indices):
+        return self.gaussian_lookup_table[indices]
+
+    def gaussian_to_indices(self, gaussian):
+
+        # 确保输入的高斯分布向量形状为 [batch_size, num_indices, gaussian_dim]
+        batch_size, num_indices, gaussian_dim = gaussian.shape
+
+        # 展平gaussian为 [batch_size * num_indices, gaussian_dim]
+        gaussian_flat = gaussian.view(-1, gaussian_dim)
+
+        # 显式计算距离
+        distances = (
+            torch.sum(gaussian_flat**2, dim=-1, keepdim=True)
+            + torch.sum(self.gaussian_lookup_table**2, dim=-1)
+            - 2 * torch.matmul(gaussian_flat, self.gaussian_lookup_table.t())
+        )
+
+        # 找到距离最近的索引
+        closest_indices = torch.argmin(distances, dim=-1)
+
+        # 将索引还原为原始形状 [batch_size, num_indices]
+        closest_indices = closest_indices.view(batch_size, num_indices)
+
+        return closest_indices
+    
+    def forward(self,indices_x0):
+        x0=self.indices_to_gaussian(indices_x0)
+        if len(x0.shape)==3:
+            x0=x0.unsqueeze(1)
+        noise=torch.randn_like(x0).to(x0.device)
+        pred_noise = self.diffusion(x0,noise)
+        loss = self.loss_fn(pred_noise, noise)
+        out = {}
+        out['loss'] = loss
+        return out
+    
+    @torch.no_grad()
+    def sample(self, batch_size = 16, xt = None):
+        samples_dist = self.diffusion.sampling(batch_size)
+        if len(samples_dist.shape)==4:
+            samples_dist=samples_dist.squeeze(1)
+        sample_indices = self.gaussian_to_indices(samples_dist)
+        return sample_indices
