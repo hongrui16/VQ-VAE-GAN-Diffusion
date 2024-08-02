@@ -8,8 +8,10 @@ from aim import Run, Image
 import os
 import time
 import tqdm
+from torch.optim.lr_scheduler import OneCycleLR
 
 from utils.utils import print_gpu_memory_usage
+from utils.utils import ExponentialMovingAverage
 
 class VQDiffusionWorker:
     def __init__(
@@ -33,6 +35,16 @@ class VQDiffusionWorker:
 
         train_model = config['architecture'][model_name]['train_model']
         learning_rate = config['trainer'][model_name]['learning_rate']
+        
+        self.img_size = config['architecture'][model_name]['img_size']
+        self.num_epochs = config['trainer']['num_epochs']
+        self.batch_size = config['trainer'][model_name]['batch_size'] 
+        self.model_ema_steps = config['trainer'][model_name]['model_ema_steps']
+        self.model_ema_decay = config['trainer'][model_name]['model_ema_decay']
+        self.batch_size = config['trainer'][model_name]['batch_size'] 
+        resume_path = config['architecture'][model_name]['resume_path']
+        diffusion_resume_path = config['architecture'][model_name]['diffusion_resume_path']
+
         beta1 = config['trainer'][model_name]['beta1']
         beta2 = config['trainer'][model_name]['beta2']
 
@@ -45,16 +57,34 @@ class VQDiffusionWorker:
         self.args = args
         self.val_dataloader = val_dataloader
         self.global_step = 0
-
+        self.epoch = 0
 
         self.vqdiffusion.to(device)
         self.device = device
 
-        if train_model:
-            self.optim = self.configure_optimizers(
-                learning_rate=learning_rate, beta1=beta1, beta2=beta2
-            )
+        adjust = 1* self.batch_size * self.model_ema_steps / self.num_epochs
+        alpha = 1.0 - self.model_ema_decay
+        alpha = min(1.0, alpha * adjust)
+        self.model_ema = ExponentialMovingAverage(self.vqdiffusion.diffusion, device=device, decay=1.0 - alpha)
 
+        if not diffusion_resume_path is None and os.path.exists(diffusion_resume_path):
+            ckpt=torch.load(diffusion_resume_path)
+            if 'diffusion' in ckpt:
+                self.vqdiffusion.diffusion.load_state_dict(ckpt['diffusion'])
+            else:
+                self.vqdiffusion.diffusion.load_state_dict(ckpt)
+            if 'optimizer' in ckpt:
+                self.optim.load_state_dict(ckpt['optimizer'])
+            if 'scheduler' in ckpt:
+                self.scheduler.load_state_dict(ckpt['scheduler'])
+            if 'global_step' in ckpt:
+                self.global_step = ckpt['global_step']
+            if 'epoch' in ckpt:
+                self.epoch = ckpt['epoch']
+            
+            self.logger.info(f"Diffusion model loaded from {diffusion_resume_path}")
+
+        if train_model:
             self.batch_size = config['trainer'][model_name]['batch_size'] 
             num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
@@ -73,16 +103,14 @@ class VQDiffusionWorker:
 
             self.logger.info(f"Save step set to {self.save_step}")             
 
-
-    def configure_optimizers(
-        self, learning_rate: float = 4.5e-06, beta1: float = 0.9, beta2: float = 0.95
-    ):               
-        optimizer = torch.optim.AdamW(self.vqdiffusion.diffusion.parameters(), lr=learning_rate, betas=(beta1, beta2))
-        return optimizer
+            self.optim = torch.optim.AdamW(self.vqdiffusion.diffusion.parameters(), lr=learning_rate, betas=(beta1, beta2))
+            self.scheduler=OneCycleLR(self.optim, learning_rate, total_steps=self.num_epochs*num_iters_per_epoch
+                                      ,pct_start=0.25,anneal_strategy='cos')
+            self.no_clip = config['trainer'][model_name]['no_clip']
 
     def train(self, dataloader: torch.utils.data.DataLoader, epochs: int):
         self.vqdiffusion.train()
-        for epoch in range(epochs):
+        for epoch in range(self.epoch, epochs):
             start_time = time.time()
             tqdm_bar = tqdm.tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
             for index, imgs in enumerate(tqdm_bar):
@@ -93,7 +121,10 @@ class VQDiffusionWorker:
                 
                 loss.backward()
                 self.optim.step()
-
+                self.scheduler.step()
+                if self.global_step % self.model_ema_steps==0:
+                    self.model_ema.update_parameters(self.vqdiffusion.diffusion)
+                
                 if not self.run is None:
                     self.run.track(
                         loss,
@@ -164,7 +195,7 @@ class VQDiffusionWorker:
                 nrow=4,
             )
     
-    def save_checkpoint(self, checkpoint_dir: str):
+    def save_checkpoint(self, checkpoint_dir: str, epoch: int = -1):
         """Saves the vqgan model checkpoints"""
         # filepath = os.path.join(checkpoint_dir, f"{self.model_name}Trans.pt")
         # if os.path.exists(filepath):
@@ -173,9 +204,15 @@ class VQDiffusionWorker:
         # self.logger.info(f"Checkpoint saved at {checkpoint_dir}")
 
         # save transformer model only
-        weight_path = os.path.join(checkpoint_dir, 'vqdiffusion.pt')
+        weight_path = os.path.join(checkpoint_dir, 'diffusion.pt')
         if os.path.exists(weight_path):
             os.remove(weight_path)
-        torch.save(self.vqdiffusion.diffusion.state_dict(), weight_path)
+        ckpt_dict = {}
+        ckpt_dict['diffusion'] = self.vqdiffusion.diffusion.state_dict()
+        ckpt_dict['optimizer'] = self.optim.state_dict()
+        ckpt_dict['scheduler'] = self.scheduler.state_dict()
+        ckpt_dict['global_step'] = self.global_step
+        ckpt_dict['epoch'] = epoch
+        torch.save(ckpt_dict, weight_path)
         self.logger.info(f"Diffusion model saved at {checkpoint_dir}")
 

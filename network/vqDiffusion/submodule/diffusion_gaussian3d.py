@@ -149,6 +149,7 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
         time_embedding_dim = 256,
         base_dim = 64,
         device = 'cpu',
+        clipped_reverse_diffusion = True,
         ):
         
         super().__init__()
@@ -162,8 +163,10 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
             sampling_timesteps,
             base_dim,
             device = device)
-        self.codebook_size=vocab_size
         
+        self.codebook_size=vocab_size
+        self.clipped_reverse_diffusion = clipped_reverse_diffusion
+
         self.register_buffer('gaussian_lookup_table', torch.rand(self.codebook_size, gaussian_dim))
         self.loss_fn=nn.MSELoss(reduction='mean')
     
@@ -206,7 +209,7 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
     
     @torch.no_grad()
     def sample(self, batch_size = 16, xt = None):
-        samples_dist = self.diffusion.sampling(batch_size)
+        samples_dist = self.diffusion.sampling(batch_size, clipped_reverse_diffusion = self.clipped_reverse_diffusion)
         if len(samples_dist.shape)==4:
             samples_dist=samples_dist.squeeze(1)
         sample_indices = self.gaussian_to_indices(samples_dist)

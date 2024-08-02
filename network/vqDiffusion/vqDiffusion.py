@@ -37,6 +37,7 @@ class VQDiffusion(nn.Module):
         distribute_dim = config['architecture'][model_name]['distribute_dim']
         diffusion_resume_path = config['architecture'][model_name]['resume_path']
         freeze_weights = config['architecture'][model_name]['freeze_weights']
+        clipped_reverse_diffusion = config['architecture'][model_name]['clipped_reverse_diffusion']
 
         assert diffusion_type in ['VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'], "Diffusion type should be either 'VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'"
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
@@ -91,6 +92,7 @@ class VQDiffusion(nn.Module):
                             timesteps = time_steps,
                             sampling_timesteps = sampling_timesteps,
                             device=device,
+                            clipped_reverse_diffusion = clipped_reverse_diffusion,
                             )
         else:
             raise ValueError(f"Diffusion type {diffusion_type} not supported")

@@ -40,6 +40,8 @@ architecture:
     indices_to_dist_fn: 'lookup_table' # 'lookup_table' or 'one_hot'
     gaussian_dim: 512
     distribute_dim: -1 # probability distribution dim, -1 for last dimension, 1 for second dimension
+    clipped_reverse_diffusion: True # False reulsts were bad.
+    diffusion_resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqdiffusion/run_2024-08-01-08-35-01/diffusion.pt'
 
   gaussiandiffusion2d:
     resume_path: None
@@ -75,7 +77,7 @@ dataset:
 
 
 trainer:  
-  num_epochs: 60
+  num_epochs: 100
   log_dir: "log"
   num_workers: 5
 
@@ -100,13 +102,16 @@ trainer:
     resume_path: None
 
   vqdiffusion:
-    learning_rate: 5.0e-04
-    beta1: 0.6
+    learning_rate: 0.0001
+    beta1: 0.65
     beta2: 0.95
     kl_loss_factor: 1.0
     rec_loss_factor: 1.0
     batch_size: 20
-
+    model_ema_steps: 10
+    model_ema_decay: 0.995
+    no_clip: False
+    
   gaussiandiffusion2d:
     learning_rate: 1.5e-04
     adam_betas: (0.65, 0.95)
@@ -117,8 +122,6 @@ trainer:
 
   gaussiandiffusion3d:
     learning_rate: 0.001
-    kl_loss_factor: 1.0
-    rec_loss_factor: 1.0
     batch_size: 500 # 500 for 28x28, 200 for 64x64
     model_ema_steps: 10
     model_ema_decay: 0.995

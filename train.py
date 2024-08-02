@@ -69,7 +69,8 @@ def main(args, config):
     # for key, value in kwargs.items():
     #     logger.info(f"{key}: {value}")
     # logging.info(f"<<<<<<<<<<<<<<<<***************hyperparameters***********************************************")
-    shutil.copy(args.config, os.path.join(exp_dir, "config_3channel.yml"))
+    config_filename = os.basename(args.config)
+    shutil.copy(args.config, os.path.join(exp_dir, config_filename))
 
     if torch.cuda.is_available():
         device = torch.device("cuda:0")
@@ -238,7 +239,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/config_3channel.yml",
+        default="configs/config_small.yml",
         help="path to config file",
     )
     
