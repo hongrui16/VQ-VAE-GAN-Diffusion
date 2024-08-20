@@ -4,19 +4,19 @@ architecture:
     img_channels: 3 # 1, 3
     img_size: 256
     latent_channels: 256
-    latent_size: 16
+    latent_size: 32
     intermediate_channels: [128, 128, 256, 256, 512]
     num_residual_blocks_encoder: 2
     num_residual_blocks_decoder: 3
     dropout: 0.0
-    attention_resolution: [16]
-    num_codebook_vectors: 1024
-    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
+    attention_resolution: [32]
+    num_codebook_vectors: 2048
+    encoder_downsampling_scale: 8 ## default is 16
+    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqvae/run_2024-08-02-16-46-06/vqvae.pt' #
     train_model: False # True, False
     freeze_weights: True # True, False
-    batch_size: 20
 
-  transformer:
+  vqvae_transformer:
     sos_token: 0
     pkeep: 0.5
     block_size: 512
@@ -38,10 +38,9 @@ architecture:
     train_model: True
     freeze_weights: False
     indices_to_dist_fn: 'lookup_table' # 'lookup_table' or 'one_hot'
-    gaussian_dim: 512
+    gaussian_dim: 1024
     distribute_dim: -1 # probability distribution dim, -1 for last dimension, 1 for second dimension
     clipped_reverse_diffusion: True # False reulsts were bad.
-    diffusion_resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqdiffusion/run_2024-08-01-08-35-01/diffusion.pt'
 
   gaussiandiffusion2d:
     resume_path: None
@@ -90,7 +89,7 @@ trainer:
     perceptual_model: "vgg"
     batch_size: 20
 
-  transformer:
+  vqvae_transformer:
     learning_rate: 4.5e-04
     beta1: 0.9
     beta2: 0.95

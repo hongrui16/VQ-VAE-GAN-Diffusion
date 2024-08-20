@@ -5,7 +5,7 @@ from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import numpy as np
 import torchvision
-
+import torch
 import sys
 
 if __name__ == '__main__':
@@ -46,7 +46,8 @@ def load_OxfordFlowers(
     
     mean = config['dataset']['mean']
     std = config['dataset']['std']
-
+    train_shuffle = config['dataset']['train_shuffle']
+    subset = config['dataset']['subset']
 
     if split == 'train':
         data_transforms = transforms.Compose([    
@@ -66,15 +67,24 @@ def load_OxfordFlowers(
 
 
     dataset = OxfordFlowersDataset(data_dir, split, transform=data_transforms, config=config)
+    dataset_classes = dataset.classes
+    if subset:
+        if split == 'train':
+            max_samples = 10*batch_size if len(dataset) > 10*batch_size else len(dataset)
+            dataset = torch.utils.data.Subset(dataset, range(0, max_samples))
+        else:
+            max_samples = 4*batch_size if len(dataset) > 4*batch_size else len(dataset)
+            dataset = torch.utils.data.Subset(dataset, range(0, max_samples))
+        
     
     if logger is not None:
-        logger.info(f"Number of {split} samples: {len(dataset)}, Number of classes: {len(dataset.classes)}")
+        logger.info(f"Number of {split} samples: {len(dataset)}, Number of classes: {len(dataset_classes)}")
         # logger.info(f"{split} Classes: {dataset.classes}")
         # logger.info(f"{split} Class to index mapping: {dataset.class_to_idx}")
     else:
-        print(f"Number of {split} samples: {len(dataset)}, Number of classes: {len(dataset.classes)}")
-        print(f"{split} Classes: {dataset.classes}")
-        print(f"{split} Class to index mapping: {dataset.class_to_idx}")
+        print(f"Number of {split} samples: {len(dataset)}, Number of classes: {len(dataset_classes)}")
+        # print(f"{split} Classes: {dataset_classes}")
+        # print(f"{split} Class to index mapping: {dataset.class_to_idx}")
 
 
     if split == 'train':

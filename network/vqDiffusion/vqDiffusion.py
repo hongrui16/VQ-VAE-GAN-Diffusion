@@ -11,7 +11,7 @@ import os
 from network.vqDiffusion.submodule.diffusion_vq_official import Diffusion_VQ_Official
 from network.vqDiffusion.submodule.diffusion_gaussian2d import GaussianDiffusion2D
 from network.vqDiffusion.submodule.unet2d import Unet2D
-
+from network.vqDiffusion.submodule.unet3d import Unet3D
 from network.vqDiffusion.submodule.diffusion_gaussian3d import VQGaussianDiffusion3DWrapper
 
 
@@ -38,6 +38,11 @@ class VQDiffusion(nn.Module):
         diffusion_resume_path = config['architecture'][model_name]['resume_path']
         freeze_weights = config['architecture'][model_name]['freeze_weights']
         clipped_reverse_diffusion = config['architecture'][model_name]['clipped_reverse_diffusion']
+        unet_dim = config['architecture'][model_name]['unet_dim']
+        sample_method = config['architecture'][model_name]['sample_method']
+        loss_fn = config['architecture'][model_name]['loss_fn']
+        return_all_timestamps = config['architecture'][model_name]['return_all_timestamps']
+
 
         assert diffusion_type in ['VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'], "Diffusion type should be either 'VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'"
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
@@ -48,8 +53,24 @@ class VQDiffusion(nn.Module):
 
 
         if diffusion_type == 'VQ_Official':
-            unet_input_channels = codebook_size
-            unet_output_channels = codebook_size - 1
+            if unet_dim == 2:
+                unet_input_channels = codebook_size
+                unet_output_channels = codebook_size - 1
+                self.unet = Unet2D(
+                            dim = 64,
+                            dim_mults = (1, 2, 4, 8),
+                            channels = unet_input_channels,
+                            out_dim= unet_output_channels
+                            )
+            elif unet_dim == 3:
+                unet_input_channels = 1
+                unet_output_channels = 1
+                time_embedding_dim = 256
+                base_dim=64
+                dim_mults= [1, 2, 4, 8]
+                self.unet= Unet3D(time_steps,time_embedding_dim,unet_input_channels,unet_output_channels, base_dim, dim_mults)
+            
+
             self.diffusion = Diffusion_VQ_Official(
                                             self.unet, diffusion_step = time_steps, 
                                             vocab_size = codebook_size,
@@ -89,10 +110,14 @@ class VQDiffusion(nn.Module):
             self.diffusion = VQGaussianDiffusion3DWrapper(
                             seq_length = seq_length,
                             vocab_size = codebook_size,
+                            gaussian_dim = gaussian_dim,
                             timesteps = time_steps,
                             sampling_timesteps = sampling_timesteps,
                             device=device,
                             clipped_reverse_diffusion = clipped_reverse_diffusion,
+                            sample_method = sample_method,
+                            loss_fn = loss_fn,
+                            return_all_timestamps = return_all_timestamps,
                             )
         else:
             raise ValueError(f"Diffusion type {diffusion_type} not supported")

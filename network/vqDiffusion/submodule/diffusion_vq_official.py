@@ -24,6 +24,7 @@ if __name__ == '__main__':
     sys.path.append(os.path.join(os.path.dirname(__file__), '../..', '..'))
 
 from network.vqDiffusion.submodule.unet2d import Unet2D
+from network.vqDiffusion.submodule.unet3d import Unet3D
 
 
 
@@ -124,6 +125,8 @@ class Diffusion_VQ_Official(nn.Module):
         self.model = model
         self.sampling_timesteps = sampling_timesteps
 
+        self.input_dim = self.model.input_dim # 4 for 3d input such as rgb image; 3 for 2d input such as grayscale image
+
         if alpha_init_type == "alpha1":
             at, bt, ct, att, btt, ctt = alpha_schedule(self.num_timesteps, N=self.num_classes-1)
         else:
@@ -205,10 +208,15 @@ class Diffusion_VQ_Official(nn.Module):
         return log_probs
 
     def predict_start(self, log_x_t, cond_emb = None, t = None):          # p(x0|xt)
-        # print('2 log_x_t:', log_x_t.type(), log_x_t.shape)#, log_x_t)
+        # print('1 log_x_t:', log_x_t.type(), log_x_t.shape)#, log_x_t) #torch.Size([bs, codebook_size, seq_len])
         x_t = log_onehot_to_index(log_x_t)
-        # print('2 x_t:', x_t.type(), x_t.shape, x_t)
-        # print('2 t:', t.type(), t.shape, t)
+        # print('1 x_t:', x_t.type(), x_t.shape) #torch.Size([bs, seq_len])
+        # print('1 t:', t.type(), t.shape, t)
+        if log_x_t.dim() == 3: ## 3 for 2d input such as grayscale image
+            log_x_t = log_x_t.unsqueeze(1)        
+
+        # print('2 log_x_t:', log_x_t.type(), log_x_t.shape)#, log_x_t) #torch.Size([bs, codebook_size, seq_len])
+            
         if self.amp == True:
             with autocast():
                 # out = self.model(x_t, cond_emb, t)
@@ -216,15 +224,23 @@ class Diffusion_VQ_Official(nn.Module):
         else:
             # out = self.model(x_t, cond_emb, t)
             out = self.model(log_x_t, cond_emb, t)
+        # print('1 out:', out.type(), out.shape)#, out) #torch.Size([bs, codebook_size -1, seq_len])
+        
+        if out.dim() == 4:
+            out = out.squeeze(1)
+            out = out[:, :-1, :]
+        # print('2 out:', out.type(), out.shape)#, out) #torch.Size([bs, codebook_size -1, seq_len])
 
         assert out.size(0) == x_t.size(0)
         assert out.size(1) == self.num_classes-1
         assert out.size()[2:] == x_t.size()[1:]
         log_pred = F.log_softmax(out.double(), dim=1).float()
+        # print('2 log_pred:', log_pred.type(), log_pred.shape)#, log_pred) #torch.Size([bs, codebook_size -1, seq_len])
         batch_size = log_x_t.size()[0]
-        if self.zero_vector is None or self.zero_vector.shape[0] != batch_size:
+        if self.zero_vector is None or self.zero_vector.shape[0] != batch_size:            
             self.zero_vector = torch.zeros(batch_size, 1, self.content_seq_len).type_as(log_x_t)- 70
         log_pred = torch.cat((log_pred, self.zero_vector), dim=1)
+        # print('3 log_pred:', log_pred.type(), log_pred.shape)#, log_pred) #torch.Size([bs, codebook_size, seq_len])
         log_pred = torch.clamp(log_pred, -70, 0)
 
         return log_pred
@@ -639,29 +655,37 @@ class Diffusion_VQ_Official(nn.Module):
 if __name__ == '__main__':
 
     seq_length = 16
+    codebook_size = 32
     bs = 1
     timesteps = 5
-    channel = 1
-    voc_size = 10
-    model = Unet2D(
-        dim = 64,
-        dim_mults = (1, 2, 4, 8),
-        channels = voc_size,
-        out_dim= voc_size -1
-    )
 
+    unet_dim = 2
+    # unet_dim = 3
 
-    input_indices = torch.randint(0, voc_size, (bs, seq_length))  # 示例离散表示，长度为16
-    diffusion = Diffusion_VQ_Official(model, diffusion_step = timesteps, vocab_size= voc_size, seq_len = seq_length, device = 'cpu')
+    if unet_dim == 2:
+        channel = 1
+        model = Unet2D(
+            dim = 64,
+            dim_mults = (1, 2, 4, 8),
+            channels = codebook_size,
+            out_dim= codebook_size -1
+        )
 
-    input = {'condition_token': None,
-                'content_token': input_indices, 
-                'condition_mask': None,
-                'condition_embed_token': None,
-                'content_logits': None,
-                }
-    
-    output = diffusion(input, return_loss=True, return_logits=True)
+    elif unet_dim == 3:
+        # unet_input_channels = codebook_size
+        # unet_output_channels = codebook_size - 1
+        unet_input_channels = 1
+        unet_output_channels = 1
+        time_embedding_dim = 256
+        base_dim=64
+        dim_mults= [1, 2, 4, 8]
+        model= Unet3D(timesteps,time_embedding_dim,unet_input_channels,unet_output_channels, base_dim, dim_mults)
+
+    diffusion = Diffusion_VQ_Official(model, diffusion_step = timesteps, vocab_size= codebook_size, seq_len = seq_length, device = 'cpu')
+
+    input_indices = torch.randint(0, codebook_size, (bs, seq_length))  # 示例离散表示，长度为16
+
+    output = diffusion(input_indices, return_loss=True, return_logits=True)
     loss = output['loss']
     logits = output['logits']
     indices = logits.argmax(dim=1)

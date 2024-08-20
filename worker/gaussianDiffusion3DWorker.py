@@ -106,10 +106,9 @@ class GaussianDiffusion3DWorker(object):
             start_time = time.time()
             tqdm_bar = tqdm.tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
             for index, image in enumerate(tqdm_bar):
-                noise=torch.randn_like(image).to(self.device)
+                # noise=torch.randn_like(image).to(self.device)
                 image=image.to(self.device)
-                pred=self.model(image,noise)
-                loss=self.loss_fn(pred,noise)
+                loss=self.model(image)
                 loss.backward()
                 self.optimizer.step()
                 self.optimizer.zero_grad()
@@ -149,8 +148,8 @@ class GaussianDiffusion3DWorker(object):
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
     
         self.model_ema.eval()
-        samples=self.model_ema.module.sampling(n_images,clipped_reverse_diffusion=not self.no_clip,device=self.device)
-        save_image(samples,f"{self.save_img_dir}/epoch_{epoch:03d}.jpg", nrow=int(math.sqrt(n_images)))
+        samples=self.model_ema.module.sampling(n_images)
+        save_image(samples,f"{self.save_img_dir}/Generated_epoch_{epoch:03d}.jpg", nrow=int(math.sqrt(n_images)))
 
 
     

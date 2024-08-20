@@ -43,7 +43,8 @@ class VQDiffusionWorker:
         self.model_ema_decay = config['trainer'][model_name]['model_ema_decay']
         self.batch_size = config['trainer'][model_name]['batch_size'] 
         resume_path = config['architecture'][model_name]['resume_path']
-        diffusion_resume_path = config['architecture'][model_name]['diffusion_resume_path']
+        diffusion_resume_path = config['architecture'][model_name]['resume_path']
+        self.return_all_timestamps = config['architecture'][model_name]['return_all_timestamps']
 
         beta1 = config['trainer'][model_name]['beta1']
         beta2 = config['trainer'][model_name]['beta2']
@@ -163,7 +164,7 @@ class VQDiffusionWorker:
 
             if epoch == 0:
                 print_gpu_memory_usage(self.logger)
-            self.save_checkpoint(self.experiment_dir)
+            # self.save_checkpoint(self.experiment_dir)
 
             self.generate_images(epoch=epoch)
             torch.cuda.empty_cache()
@@ -175,7 +176,7 @@ class VQDiffusionWorker:
                 break
             
     
-    def generate_images(self, n_images: int = 16, epoch = -1):
+    def generate_images(self, n_images: int = 16, epoch = -1, flag ='generate'):
 
         self.logger.info(f"{self.model_name} vqdiffusion Generating {n_images} images...")
         
@@ -184,17 +185,35 @@ class VQDiffusionWorker:
         self.vqdiffusion = self.vqdiffusion.to(self.device)
         with torch.no_grad():
             sample_indices = self.vqdiffusion.sample(n_images)
-            sampled_imgs = self.vqdiffusion.z_to_image(sample_indices)
-            sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
-            sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
+            # print('sample_indices', sample_indices.shape) #torch.Size([16, 10, 256])
+            # , 'return_all_timestamps', self.return_all_timestamps) 
+            if self.return_all_timestamps and sample_indices.dim() == 3:                
+                num_timestamps = sample_indices.shape[1]
+                bs = sample_indices.shape[0]
+                nrow = int(num_timestamps**0.5)
+                for i in range(bs):
+                    sampled_imgs = self.vqdiffusion.z_to_image(sample_indices[i])
+                    sampled_imgs = sampled_imgs.detach()
+                    sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
+                    torchvision.utils.save_image(
+                        sampled_imgs,
+                        os.path.join(self.save_img_dir, f"{self.model_name}_{flag}_epoch{epoch:03d}_bs{i:02d}.jpg"),
+                        nrow=nrow
+                        )
+                    if i > 8:
+                        break
+            else:
+                sampled_imgs = self.vqdiffusion.z_to_image(sample_indices)
+                sampled_imgs = sampled_imgs.detach()#.cpu().permute(1, 2, 0).numpy()
+                sampled_imgs = (sampled_imgs - sampled_imgs.min()) / (sampled_imgs.max() - sampled_imgs.min())
 
 
-            torchvision.utils.save_image(
-                sampled_imgs,
-                os.path.join(self.save_img_dir, f"{self.model_name}Trans_epoch{epoch:03d}.jpg"),
-                nrow=4,
-            )
-    
+                torchvision.utils.save_image(
+                    sampled_imgs,
+                    os.path.join(self.save_img_dir, f"{self.model_name}_{flag}_epoch{epoch:03d}.jpg"),
+                    nrow=4,
+                )
+        
     def save_checkpoint(self, checkpoint_dir: str, epoch: int = -1):
         """Saves the vqgan model checkpoints"""
         # filepath = os.path.join(checkpoint_dir, f"{self.model_name}Trans.pt")

@@ -128,7 +128,7 @@ class Unet3D(nn.Module):
     '''
     simple unet design without attention
     '''
-    def __init__(self,timesteps,time_embedding_dim,in_channels=3,out_channels=2,base_dim=32,dim_mults=[2,4,8,16]):
+    def __init__(self,timesteps,time_embedding_dim = 256,in_channels=3,out_channels=2,base_dim=64,dim_mults=[1, 2, 4, 8]):
         super().__init__()
         assert isinstance(dim_mults,(list,tuple))
         assert base_dim%2==0 
@@ -145,8 +145,9 @@ class Unet3D(nn.Module):
                                         ResidualBottleneck(channels[-1][1],channels[-1][1]//2))
 
         self.final_conv=nn.Conv2d(in_channels=channels[0][0]//2,out_channels=out_channels,kernel_size=1)
+        self.input_dim = 4 # 4 for 3d input such as rgb image; 3 for 2d input such as grayscale image
 
-    def forward(self,x,t=None):
+    def forward(self, x, x_self_cond = None, t = None):
         x=self.init_conv(x)
         if t is not None:
             t=self.time_embedding(t)

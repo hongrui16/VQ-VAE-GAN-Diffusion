@@ -35,6 +35,7 @@ def main(args, config):
         config['trainer'][model_name]["batch_size"] = 1
         train_split = 'val'
         config['trainer']["num_workers"] = 1
+        
     else:
         train_split = config['dataset']["train_split"]
 
@@ -69,7 +70,7 @@ def main(args, config):
     # for key, value in kwargs.items():
     #     logger.info(f"{key}: {value}")
     # logging.info(f"<<<<<<<<<<<<<<<<***************hyperparameters***********************************************")
-    config_filename = os.basename(args.config)
+    config_filename = os.path.basename(args.config)
     shutil.copy(args.config, os.path.join(exp_dir, config_filename))
 
     if torch.cuda.is_available():
@@ -239,7 +240,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/config_small.yml",
+        default="configs/training_config_small.yml",
         help="path to config file",
     )
     

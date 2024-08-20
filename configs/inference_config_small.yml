@@ -1,31 +1,30 @@
 architecture:
-  model_name: "vqvae" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
+  model_name: "vqvae_transformer" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
   vqvae:
     img_channels: 3 # 1, 3
     img_size: 256
     latent_channels: 256
-    latent_size: 32
+    latent_size: 16
     intermediate_channels: [128, 128, 256, 256, 512]
     num_residual_blocks_encoder: 2
     num_residual_blocks_decoder: 3
     dropout: 0.0
-    attention_resolution: [32]
-    num_codebook_vectors: 2048
-    resume_path: '' #'/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
-    train_model: True # True, False
-    freeze_weights: False # True, False
-    batch_size: 15
+    attention_resolution: [16]
+    num_codebook_vectors: 1024
+    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
+    train_model: False # True, False
+    freeze_weights: True # True, False
 
-  transformer:
+  vqvae_transformer:
     sos_token: 0
     pkeep: 0.5
     block_size: 512
     n_layer: 12
     n_head: 16
     n_embd: 1024
-    resume_path: None
-    train_model: True
+    train_model: False
     freeze_weights: False
+    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/transformer.pt'
   
   vqdiffusion: ## only for vqdiffusion
     img_size: 256
@@ -34,27 +33,31 @@ architecture:
     noise_schedule: "linear"
     diffusion_type: 'gaussiandiffusion3d' #'VQ_Official', 'gaussiandiffusion2d',  'gaussiandiffusion3d'
     objective: 'pred_noise'
-    resume_path: None
-    train_model: True
+    train_model: False
     freeze_weights: False
     indices_to_dist_fn: 'lookup_table' # 'lookup_table' or 'one_hot'
-    gaussian_dim: 512
+    gaussian_dim: 96
     distribute_dim: -1 # probability distribution dim, -1 for last dimension, 1 for second dimension
     clipped_reverse_diffusion: True # False reulsts were bad.
-    diffusion_resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqdiffusion/run_2024-08-01-08-35-01/diffusion.pt'
+    resume_path: '' #'/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqdiffusion/run_2024-08-01-08-35-01/diffusion.pt'
+    unet_dim: 3 # 3 for 3d, 2 for 2d
+    sample_method: 'ddim'
+    loss_fn: 'noise_mse' # 'noise_mse', loss_fn in ['noise_mse', 'elbo']
+    return_all_timestamps: True
+
 
   gaussiandiffusion2d:
     resume_path: None
     img_size: 256
     diffusion_steps: 500
     sampling_steps: 500
-    train_model: True
+    train_model: False
     freeze_weights: False
 
   gaussiandiffusion3d:
     resume_path: ''
     img_size: 256 # 28 for mnist
-    train_model: True
+    train_model: False
     freeze_weights: False
     n_samples: 36
     model_base_dim: 64
@@ -74,10 +77,12 @@ dataset:
   max_train_samples: 'inf'
   max_val_samples: 'inf'  #600, 'inf'
   train_split: 'train' # train, val; val for convergence test
+  train_shuffle: True
+  subset: True #  True for subset, False for full dataset
 
 
 trainer:  
-  num_epochs: 100
+  num_epochs: 50
   log_dir: "log"
   num_workers: 5
 
@@ -90,7 +95,7 @@ trainer:
     perceptual_model: "vgg"
     batch_size: 20
 
-  transformer:
+  vqvae_transformer:
     learning_rate: 4.5e-04
     beta1: 0.9
     beta2: 0.95
@@ -107,7 +112,7 @@ trainer:
     beta2: 0.95
     kl_loss_factor: 1.0
     rec_loss_factor: 1.0
-    batch_size: 20
+    batch_size: 20 # 20 for 3d_guassian, 10 for vq_official
     model_ema_steps: 10
     model_ema_decay: 0.995
     no_clip: False

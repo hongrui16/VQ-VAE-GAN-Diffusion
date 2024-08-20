@@ -179,7 +179,7 @@ class VQTransformerWorker:
                 break
             
     
-    def generate_images(self, n_images: int = 16, epoch = -1, random_indices = False):
+    def generate_images(self, n_images: int = 16, epoch = -1, random_indices = False, flag = 'generate'):
 
         self.logger.info(f"{self.model_name} Generating {n_images} images...")
         
@@ -196,7 +196,7 @@ class VQTransformerWorker:
             sampled_imgs = self.vqTransModel.z_to_image(sample_indices)
             torchvision.utils.save_image(
                 sampled_imgs,
-                os.path.join(self.save_img_dir, f"{self.model_name}_epoch{epoch:03d}.jpg"),
+                os.path.join(self.save_img_dir, f"{self.model_name}_{flag}_epoch{epoch:03d}.jpg"),
                 nrow=4,
             )
     

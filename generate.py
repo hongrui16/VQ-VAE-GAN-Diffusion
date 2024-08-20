@@ -20,38 +20,31 @@ from network.vqDiffusion.vqDiffusion import VQDiffusion
 from worker.vqganVqvaeWorker import VQGANVQVAEWorker
 from worker.vqTransformerWorker import VQTransformerWorker
 from worker.vqdiffusionWorker import VQDiffusionWorker
+from worker.gaussianDiffusion2DWorker import GaussianDiffusion2DWorker
+from worker.gaussianDiffusion3DWorker import GaussianDiffusion3DWorker
 
-
+from network.vqDiffusion.submodule.diffusion_gaussian2d import GaussianDiffusion2D
+from network.vqDiffusion.submodule.unet2d import Unet2D
+from network.vqDiffusion.submodule.diffusion_gaussian3d import GaussianDiffusion3D
 
 
 def main(args, config):
-    if args.debug:
-        config['dataset']["batch_size"] = 1
-
     model_name = config['architecture']["model_name"]
-    batch_size = config['dataset']["batch_size"] 
-    dataset_name = config['dataset']["dataset_name"]
-    num_workers = config['dataset']["num_workers"]
-    vqvae_resume_path = config['architecture']['vqvae']['resume_path']
 
-    config['architecture']['vqvae']['freeze_weights'] = True
-    config['architecture']['diffusion']['freeze_weights'] = True
-    config['architecture']['transformer']['freeze_weights'] = True
-    config['architecture']['vqvae']['train_vqvae'] = False
-    config['architecture']['diffusion']['train_diffusion'] = False
-    config['architecture']['transformer']['train_transformer'] = False
+    if args.debug:
+        config['trainer'][model_name]["batch_size"] = 1
+        config['trainer']["num_workers"] = 1
 
 
-    if vqvae_resume_path is None:
-        raise ValueError("Please provide the path to the pretrained VQVAE model")
-    if not os.path.exists(vqvae_resume_path):
-        raise ValueError(f"VQVAE model not found at {vqvae_resume_path}")
-    
-    root_dir = vqvae_resume_path[:vqvae_resume_path.find('vqvae.pt')]
+
+
+    resume_path = config['architecture'][model_name]['resume_path']
+    base_name = os.path.basename(resume_path)
+    log_dir = resume_path[:resume_path.find(base_name)]
 
     current_timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
-    exp_dir = os.path.join(root_dir, 'test', f'{current_timestamp}')
+    exp_dir = os.path.join(log_dir, 'inference', f'run_{current_timestamp}')
     os.makedirs(exp_dir, exist_ok=True)
     # checkpoint_dir = os.path.join(exp_dir, "checkpoints")
     # os.makedirs(checkpoint_dir, exist_ok=True)
@@ -81,78 +74,139 @@ def main(args, config):
         
         logging.info("Using CPU")
 
-    vqvae = VQVAE(logger= logger, config = config)
-    logging.info(f"VQVAE model created")
-
-
-    if 'transformer' in model_name.lower():
-        vqgan_transformer = VQTransformer(
-            vqvae, config = config, device=device
-        )
-        logging.info(f"{model_name} Transformer models created")
-
-    if 'diffusion' in model_name.lower():
-        vqdiffusion = VQDiffusion(vqvae, device=device, 
-                                    logger=logger, config = config)
-        logging.info(f"{model_name} Diffusion models created")
-
-    # train_dataloader, train_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, 
-    #                                                   num_workers = num_workers, split=train_split, 
-    #                                                   logger=logger, config = config)
-    val_dataloader, val_dataset = load_dataloader(name=dataset_name, batch_size = batch_size, 
-                                                  num_workers = num_workers, split='val', 
-                                                    logger=logger, config = config)    
-    logging.info(f"Data loaded")
-
-
-
     
-    vqgan_vqvae_worker = VQGANVQVAEWorker(
-        model=vqvae,
-        device=device,
-        experiment_dir=exp_dir,
-        logger = logger,
-        save_img_dir = save_dir,
-        args = args,
-        val_dataloader=val_dataloader,
-        config = config,
-    )
-    logger.info(f'Initializing {model_name.lower} Worker')
-    n_images = 34
-    vqgan_vqvae_worker.generate_images(n_images = n_images, dataloader = val_dataloader, random_indices=False)
-    logger.info(f'Generated {n_images} images')
 
 
-    if 'transformer' in model_name.lower():
-        vqTransformer_worker = VQTransformerWorker(
-            model=vqgan_transformer,
+    if model_name.lower() in ['vqgan', 'vqvae', 'vqvae_transformer', 'vqgan_transformer', 'vqdiffusion']:
+        vqvae = VQVAE(logger= logger, config = config)
+        logging.info(f"VQVAE model created")
+            
+        vqgan_vqvae_worker = VQGANVQVAEWorker(
+            model=vqvae,
+            # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
             save_img_dir = save_dir,
             args = args,
-            val_dataloader=val_dataloader,
+            config = config,
+        )
+        logger.info(f'Initializing {model_name.lower} Worker')
+        if model_name.lower() in ['vqgan', 'vqvae']:
+            logger.info(f"{model_name} generates images.")
+            vqgan_vqvae_worker.generate_images()
+
+    if 'transformer' in model_name.lower():
+        vqgan_transformer = VQTransformer(
+            vqvae, 
+            config = config, 
+            device=device,
+            logger = logger,
+        )
+        logging.info(f"{model_name} Transformer models created")
+
+        vqTransformer_worker = VQTransformerWorker(
+            model=vqgan_transformer,
+            # run=run,
+            device=device,
+            logger = logger,
+            save_img_dir = save_dir,
+            args = args,
             config = config,
         )
         logger.info('Initializing Transformer Worker')
 
+        logger.info(f"{model_name} generates images.")
+        vqTransformer_worker.generate_images()
 
-    
-    if 'diffusion' in model_name.lower():
+
+
+    if 'vqdiffusion' in model_name.lower():
+        vqdiffusion = VQDiffusion(vqvae, device=device, 
+                                    logger=logger, config = config)
+        logging.info(f"{model_name} models created")
+
         vqdiffusion_worker = VQDiffusionWorker(
             model=vqdiffusion,
+            # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
             save_img_dir = save_dir,
             args = args,
-            val_dataloader=val_dataloader,
             config = config,
         )
         logger.info('Initializing Diffusion Worker')
+        logger.info(f"{model_name} generates images.")
+        vqdiffusion_worker.generate_images()
 
 
+    if 'gaussiandiffusion2d' == model_name.lower():
+        img_size = config['architecture'][model_name]['img_size']
+        unet2d = Unet2D(
+            dim = 64,
+            dim_mults = (1, 2, 4, 8),
+            channels = img_size,
+            out_dim= img_size )
+        time_steps = config['architecture'][model_name]['diffusion_steps']
+        sampling_timesteps = config['architecture'][model_name]['sampling_steps']
+        gaussian_diffusion_2d = GaussianDiffusion2D(unet2d, timesteps = time_steps,
+                                                sampling_timesteps = sampling_timesteps,
+                                                diffusion_type=model_name)
+        
+        logging.info(f"{model_name} models created")
 
+        gaussian_diffusion_2d_worker = GaussianDiffusion2DWorker(gaussian_diffusion_2d, 
+                                                                 device=device,
+                                                                experiment_dir  = exp_dir, 
+                                                                args = args,
+                                                                save_img_dir = save_dir,
+                                                                logger=logger, 
+                                                                config = config)
+        
+        logger.info('Initializing Gaussian Diffusion Worker')
+        logger.info(f"{model_name} generates images.")
+        gaussian_diffusion_2d_worker.generate_images()
+
+    
+    if 'gaussiandiffusion3d' == model_name.lower():
+
+        img_size = config['architecture'][model_name]['img_size']
+
+        timesteps = config['architecture'][model_name]['diffusion_steps']
+        in_channels = config['architecture'][model_name]['input_channels']
+        sampling_timesteps = config['architecture'][model_name]['sampling_steps']
+        model_base_dim = config['architecture'][model_name]['model_base_dim']
+        gaussian_diffusion_3d = GaussianDiffusion3D(
+                                                image_sizes = [img_size,img_size],
+                                                timesteps = timesteps,
+                                                in_channels = in_channels,
+                                                sampling_timesteps = sampling_timesteps,
+                                                base_dim = model_base_dim,
+                                                dim_mults = [2,4],
+                                                device = device,
+                                                )
+        
+        logging.info(f"{model_name} models created")
+
+        gaussian_diffusion_3d_worker = GaussianDiffusion3DWorker(gaussian_diffusion_3d, 
+                                                                 device=device, 
+                                                                experiment_dir  = exp_dir, 
+                                                                args = args,
+                                                                save_img_dir = save_dir,
+                                                                logger = logger, 
+                                                                config = config)
+        
+        logger.info(f'Initializing {model_name} Worker')
+        logger.info(f"{model_name} generates images.")
+        gaussian_diffusion_3d_worker.generate_images()
+
+    '''
+    run = Run(experiment=dataset_name)
+    run["hparams"] = config
+    '''
+
+    
     ### get the gpu memory usage and print it out
 
     logging.info(f'Memory Usage:{torch.cuda.memory_allocated()}')  
@@ -165,8 +219,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default=None,
-
+        default="configs/inference_config_small.yml",
         help="path to config file",
     )
     
@@ -181,71 +234,6 @@ if __name__ == "__main__":
     '--debug', 
     action='store_true', 
     help='Enable debug mode')
-
-
-    # parser.add_argument(
-    #     "--log_dir",
-    #     type=str,
-    #     default="log",
-    #     help="path to save log files",
-    # )
-
-
-
-    # parser.add_argument(
-    #     "--batch_size",
-    #     type=int,
-    #     default=2,
-    #     help="batch size",
-    #     )
-    
-    # parser.add_argument(
-    #     '--num_epochs',
-    #     type=int,
-    #     default=1,
-    #     help='number of epochs to train'
-    # )
-
-
-
-    # parser.add_argument(
-    #     "--dataset_name",
-    #     type=str,
-    #     default="mnist",
-    #     help="Dataset for the model",
-    # )
-    # parser.add_argument(
-    #     "--device",
-    #     type=str,
-    #     default="cuda",
-    #     choices=["cpu", "cuda"],
-    #     help="Device to train the model on",
-    # )
-    
-
-    
-
-    # parser.add_argument(
-    #     '--model_name',
-    #     type=str,
-    #     help='input model name, vqgan, vqvae, vqdiffusion'
-    # )
-    
-    
-
-    # parser.add_argument(
-    #     '--resume_ckpt_dir',
-    #     type=str,
-    #     default=None,
-    #     help='path to the checkpoint to resume training')
-    
-    # parser.add_argument(
-    #     '--no_train_transformer',
-    #     action='store_false',
-    #     dest='train_transformer',
-    #     help='Do not train the transformer (default is to train)'
-    # )
-
 
     args = parser.parse_args()
     with open(args.config) as f:

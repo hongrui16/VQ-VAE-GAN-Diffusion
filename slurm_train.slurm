@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --partition=contrib-gpuq                    # need to set 'gpuq' or 'contrib-gpuq'  partition
+#SBATCH --partition=gpuq                    # need to set 'gpuq' or 'contrib-gpuq'  partition
 #SBATCH --qos=gpu                           # need to select 'gpu' QOS or other relvant QOS
 #SBATCH --job-name=vqdiffusion                   # vqgan, vqvae, vqdiffusion, gaussiandiffusion
 #SBATCH --output=/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/%u/%x-%N-%j.out   # Output file
@@ -31,7 +31,7 @@ cd /home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan
 
 # salloc -p contrib-gpuq -q gpu --nodes=1 --ntasks-per-node=15 --gres=gpu:3g.40gb:1 --mem=50gb -t 0-24:00:00
 
-# python train.py 
-python train.py --config configs/config_large.yml
+python train.py 
+# python train.py --config configs/config_large.yml
 # cd /home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/dataloader
 # python InterHand26M_loader.py

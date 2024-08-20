@@ -50,7 +50,9 @@ class VQTransformer(nn.Module):
         self.pkeep = pkeep
 
         if not transformer_resume_path is None:
+            print(f"Transformer loaded weight from {transformer_resume_path}")
             if os.path.exists(transformer_resume_path):
+                print(f"Transformer loaded weight from {transformer_resume_path}")
                 self.transformer.load_state_dict(torch.load(transformer_resume_path))
                 self.logger.info(f"Transformer loaded weight from {transformer_resume_path}")
         
