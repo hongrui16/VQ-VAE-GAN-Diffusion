@@ -30,19 +30,15 @@ from network.vqDiffusion.submodule.diffusion_gaussian3d import GaussianDiffusion
 
 def main(args, config):
     model_name = config['architecture']["model_name"]
+    dataset_name = config['dataset']["dataset_name"]
 
     if args.debug:
-        config['trainer'][model_name]["batch_size"] = 1
+        config['dataset']["batch_size"][model_name][dataset_name] = 1
         train_split = 'val'
         config['trainer']["num_workers"] = 1
         
     else:
         train_split = config['dataset']["train_split"]
-
-
-
-
-    dataset_name = config['dataset']["dataset_name"]
 
     log_dir = config['trainer']["log_dir"]
     num_epochs = config['trainer']["num_epochs"]
@@ -81,13 +77,16 @@ def main(args, config):
         
         logging.info("Using CPU")
 
-    
+
     train_dataloader, train_dataset = load_dataloader(name=dataset_name, split=train_split, 
                                                       logger=logger, config = config)
     val_dataloader, val_dataset = load_dataloader(name=dataset_name, split='val', 
                                                     logger=logger, config = config)    
     logging.info(f"Data loaded")
-
+    
+    img_size = config["dataset"]["img_size"][dataset_name]
+    in_channels = config['dataset']['img_channels'][dataset_name]
+    batch_size = config['dataset']["batch_size"][model_name][dataset_name]
 
     if model_name.lower() in ['vqgan', 'vqvae', 'vqvae_transformer', 'vqgan_transformer', 'vqdiffusion']:
         vqvae = VQVAE(logger= logger, config = config)
@@ -165,7 +164,6 @@ def main(args, config):
 
 
     if 'gaussiandiffusion2d' == model_name.lower():
-        img_size = config['architecture'][model_name]['img_size']
         unet2d = Unet2D(
             dim = 64,
             dim_mults = (1, 2, 4, 8),
@@ -193,10 +191,10 @@ def main(args, config):
     
     if 'gaussiandiffusion3d' == model_name.lower():
 
-        img_size = config['architecture'][model_name]['img_size']
 
         timesteps = config['architecture'][model_name]['diffusion_steps']
-        in_channels = config['architecture'][model_name]['input_channels']
+        
+
         sampling_timesteps = config['architecture'][model_name]['sampling_steps']
         model_base_dim = config['architecture'][model_name]['model_base_dim']
         gaussian_diffusion_3d = GaussianDiffusion3D(

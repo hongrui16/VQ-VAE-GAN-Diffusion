@@ -35,13 +35,18 @@ class VQDiffusionWorker:
 
         train_model = config['architecture'][model_name]['train_model']
         learning_rate = config['trainer'][model_name]['learning_rate']
-        
-        self.img_size = config['architecture'][model_name]['img_size']
+        dataset_name = config['dataset']['dataset_name']
+
+        img_size = config["dataset"]["img_size"][dataset_name]
+        img_channels = config['dataset']['img_channels'][dataset_name]
+        batch_size = config['dataset']["batch_size"][model_name][dataset_name]
+
+        self.img_size = img_size
+        self.batch_size = batch_size
+
         self.num_epochs = config['trainer']['num_epochs']
-        self.batch_size = config['trainer'][model_name]['batch_size'] 
         self.model_ema_steps = config['trainer'][model_name]['model_ema_steps']
         self.model_ema_decay = config['trainer'][model_name]['model_ema_decay']
-        self.batch_size = config['trainer'][model_name]['batch_size'] 
         resume_path = config['architecture'][model_name]['resume_path']
         diffusion_resume_path = config['architecture'][model_name]['resume_path']
         self.return_all_timestamps = config['architecture'][model_name]['return_all_timestamps']
@@ -86,7 +91,6 @@ class VQDiffusionWorker:
             self.logger.info(f"Diffusion model loaded from {diffusion_resume_path}")
 
         if train_model:
-            self.batch_size = config['trainer'][model_name]['batch_size'] 
             num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:

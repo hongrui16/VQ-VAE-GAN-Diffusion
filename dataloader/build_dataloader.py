@@ -28,14 +28,16 @@ def load_dataloader(
         torch.utils.data.DataLoader: The data loader.
     """
     model_name = config['architecture']['model_name']
-    image_size = config['architecture'][model_name]['img_size']
-    batch_size = config['trainer'][model_name]['batch_size']
+    dataset_name = config['dataset']['dataset_name']
+    img_size = config["dataset"]["img_size"][dataset_name]
+    in_channels = config['dataset']['img_channels'][dataset_name]
+    batch_size = config['dataset']["batch_size"][model_name][dataset_name]    
     num_workers = config['trainer']['num_workers']
     # print(f"Loading {name} dataset")
     if name == "mnist":
         return load_mnist(
             batch_size=batch_size,
-            image_size=image_size,
+            image_size=img_size,
             num_workers=num_workers,
             # save_path=save_path,
             split=split,
@@ -45,7 +47,7 @@ def load_dataloader(
     elif name == "cifar10":
         return load_cifar10(
             batch_size=batch_size,
-            image_size=image_size,
+            image_size=img_size,
             num_workers=num_workers,
             # save_path=save_path,
             split=split,
@@ -54,7 +56,7 @@ def load_dataloader(
     elif name == "InterHand26M":
         return load_InterHand26M(
             batch_size=batch_size,
-            image_size=image_size,
+            image_size=img_size,
             num_workers=num_workers,
             # save_path=save_path,
             split=split,
@@ -64,7 +66,7 @@ def load_dataloader(
     elif name == "Oxford102Flower":
         return load_OxfordFlowers(
             batch_size=batch_size,
-            image_size=image_size,
+            image_size=img_size,
             num_workers=num_workers,
             # save_path=save_path,
             split=split,

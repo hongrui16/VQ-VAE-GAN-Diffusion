@@ -32,9 +32,16 @@ class GaussianDiffusion3DWorker(object):
 
         model_name = config['architecture']['model_name']
         self.model_name = model_name
-        self.img_size = config['architecture'][model_name]['img_size']
+        dataset_name = config['dataset']['dataset_name']
+
+        img_size = config["dataset"]["img_size"][dataset_name]
+        img_channels = config['dataset']['img_channels'][dataset_name]
+        batch_size = config['dataset']["batch_size"][model_name][dataset_name]
+
+        self.img_size = img_size
+        self.batch_size = batch_size
+
         self.num_epochs = config['trainer']['num_epochs']
-        self.batch_size = config['trainer'][model_name]['batch_size'] 
         self.model_ema_steps = config['trainer'][model_name]['model_ema_steps']
         self.model_ema_decay = config['trainer'][model_name]['model_ema_decay']
         lr = config['trainer'][model_name]['learning_rate']
@@ -66,7 +73,6 @@ class GaussianDiffusion3DWorker(object):
 
         self.global_steps=0
         
-        self.batch_size = config['trainer'][model_name]['batch_size'] 
         train_model = config['architecture'][model_name]['train_model']        
         if train_model:
             num_iters_per_epoch = len(train_dataset)//self.batch_size
@@ -130,7 +136,7 @@ class GaussianDiffusion3DWorker(object):
             ckpt={"model":self.model.state_dict(),
                     "model_ema":self.model_ema.state_dict()}
 
-            torch.save(ckpt, f"{self.experiment_dir}/model.pt")
+            # torch.save(ckpt, f"{self.experiment_dir}/model.pt")
 
             
             self.generate_images(epoch = epoch)

@@ -80,10 +80,6 @@ class GaussianDiffusion2DWorker(object):
             mixed_precision = mixed_precision_type if amp else 'no'
         )
         model_name = config['architecture']['model_name']
-        if 'img_size' in config['architecture'][model_name]:
-            self.img_size = config['architecture'][model_name]['img_size']  
-        else:
-            self.img_size = 256
         
         if 'train_model' in config['architecture'][model_name]:
             train_model = config['architecture'][model_name]['train_model']
@@ -103,7 +99,16 @@ class GaussianDiffusion2DWorker(object):
         assert has_int_squareroot(num_samples), 'number of samples must have an integer square root'
         self.num_samples = num_samples
 
-        self.batch_size = config['trainer'][model_name]['batch_size'] 
+        model_name = config['architecture']['model_name']
+        dataset_name = config['dataset']['dataset_name']
+        img_size = config["dataset"]["img_size"][dataset_name]
+        img_channels = config['dataset']['img_channels'][dataset_name]
+        batch_size = config['dataset']["batch_size"][model_name][dataset_name]
+
+        self.img_size = img_size
+        self.batch_size = batch_size
+        self.num_epochs = config['trainer']['num_epochs']
+        
         self.gradient_accumulate_every = gradient_accumulate_every
         self.max_grad_norm = max_grad_norm
 

@@ -38,6 +38,13 @@ class VQGANVQVAEWorker:
         config = None,
     ):
         model_name = config['architecture']['model_name']
+        dataset_name = config['dataset']['dataset_name']
+        img_size = config["dataset"]["img_size"][dataset_name]
+        img_channels = config['dataset']['img_channels'][dataset_name]
+        batch_size = config['dataset']["batch_size"][model_name][dataset_name]
+
+        self.img_size = img_size
+        self.batch_size = batch_size
         
         learning_rate = config['trainer']['vqvae']['learning_rate']
         beta1 = config['trainer']['vqvae']['beta1']
@@ -108,7 +115,6 @@ class VQGANVQVAEWorker:
             self.rec_loss_factor = rec_loss_factor
 
 
-            self.batch_size = config['trainer'][model_name]['batch_size'] 
             num_iters_per_epoch = len(train_dataset)//self.batch_size
             self.save_step = 100
             if num_iters_per_epoch < 0.1*self.save_step:

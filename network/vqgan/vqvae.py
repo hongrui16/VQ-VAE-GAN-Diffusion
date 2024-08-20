@@ -35,9 +35,11 @@ class VQVAE(nn.Module):
         config = None,
     ):
         super().__init__()
-
-        img_channels = config["architecture"]["vqvae"]["img_channels"]
-        img_size = config["architecture"]["vqvae"]["img_size"]
+        model_name = config['architecture']['model_name']
+        dataset_name = config['dataset']['dataset_name']
+        img_size = config["dataset"]["img_size"][dataset_name]
+        img_channels = config['dataset']['img_channels'][dataset_name]
+        batch_size = config['dataset']["batch_size"][model_name][dataset_name]
         latent_channels = config["architecture"]["vqvae"]["latent_channels"]
         latent_size = config["architecture"]["vqvae"]["latent_size"]
         intermediate_channels = config["architecture"]["vqvae"]["intermediate_channels"]

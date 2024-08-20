@@ -169,6 +169,34 @@ class GaussianDiffusion3D(nn.Module):
         return mean+std*noise 
 
     
+
+    @torch.no_grad()
+    def _reverse_diffusion_with_clip(self,x_t,t,noise): 
+        '''
+        p(x_{0}|x_{t}),q(x_{t-1}|x_{0},x_{t})->mean,std
+
+        pred_noise -> pred_x_0 (clip to [-1.0,1.0]) -> pred_mean and pred_std
+        '''
+        pred=self.model(x_t,t = t)
+        alpha_t=self.alphas.gather(-1,t).reshape(x_t.shape[0],1,1,1)
+        alpha_t_cumprod=self.alphas_cumprod.gather(-1,t).reshape(x_t.shape[0],1,1,1)
+        beta_t=self.betas.gather(-1,t).reshape(x_t.shape[0],1,1,1)
+        
+        x_0_pred=torch.sqrt(1. / alpha_t_cumprod)*x_t-torch.sqrt(1. / alpha_t_cumprod - 1.)*pred
+        x_0_pred.clamp_(-1., 1.)
+
+        if t.min()>0:
+            alpha_t_cumprod_prev=self.alphas_cumprod.gather(-1,t-1).reshape(x_t.shape[0],1,1,1)
+            mean= (beta_t * torch.sqrt(alpha_t_cumprod_prev) / (1. - alpha_t_cumprod))*x_0_pred +\
+                 ((1. - alpha_t_cumprod_prev) * torch.sqrt(alpha_t) / (1. - alpha_t_cumprod))*x_t
+
+            std=torch.sqrt(beta_t*(1.-alpha_t_cumprod_prev)/(1.-alpha_t_cumprod))
+        else:
+            mean=(beta_t / (1. - alpha_t_cumprod))*x_0_pred #alpha_t_cumprod_prev=1 since 0!=1
+            std=0.0
+
+        return mean+std*noise 
+    
     def q_posterior(self, x_0, x_t, t):
         '''
         q(x_{t-1}|x_{0},x_{t})
@@ -388,6 +416,7 @@ class GaussianDiffusion3D(nn.Module):
             loss = self.compute_noise_loss(x_start, xt, t, noise)
         return loss
 
+    @torch.no_grad()
     def sampling(self, batch_size = 16, return_all_timestamps = False):
         # print('sample_method:', self.sample_method, 'return_all_timestamps:', return_all_timestamps)
         if self.sample_method == 'ddim':
@@ -396,6 +425,33 @@ class GaussianDiffusion3D(nn.Module):
             return self.ddpm_sample(batch_size, return_all_timestamps)
         else:
             raise ValueError(f"Invalid sample method: {self.sample_method}")
+
+    
+    # def forward(self,x_start):
+    #     # x:NCHW
+    #     t=torch.randint(0,self.timesteps,(x_start.shape[0],)).to(x_start.device)
+    #     noise = torch.randn_like(x_start, device=self.device)
+
+    #     x_t=self._forward_diffusion(x_start,t,noise)
+    #     pred_noise = self.model(x_t,t = t)
+    #     loss = torch.nn.functional.mse_loss(pred_noise,noise)
+    #     return loss
+
+    # @torch.no_grad()
+    # def sampling(self,n_samples,clipped_reverse_diffusion=True):
+    #     x_t=torch.randn((n_samples,self.in_channels,self.image_sizes[0], self.image_sizes[1])).to(self.device)
+    #     for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling"):
+    #         noise=torch.randn_like(x_t).to(self.device)
+    #         t=torch.tensor([i for _ in range(n_samples)]).to(self.device)
+
+    #         if clipped_reverse_diffusion:
+    #             x_t=self._reverse_diffusion_with_clip(x_t,t,noise)
+    #         else:
+    #             x_t=self._reverse_diffusion(x_t,t,noise)
+
+    #     x_t=(x_t+1.)/2. #[-1,1] to [0,1]
+
+    #     return x_t
 
 
 
