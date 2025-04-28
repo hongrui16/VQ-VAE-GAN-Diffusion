@@ -13,16 +13,17 @@ from torch.optim.lr_scheduler import OneCycleLR
 from utils.utils import print_gpu_memory_usage
 from utils.utils import ExponentialMovingAverage
 
+from network.vqDiffusion.vqDiffusion import VQDiffusion
+from network.vqvae.vqvae import VQVAE
+
 class VQDiffusionWorker:
     def __init__(
         self,
-        model: nn.Module,
         run: Run = None,
         experiment_dir: str = "experiments",
         device: str = "cpu",
         logger = None,
         train_dataset = None,
-        save_img_dir = None,
         args = None,
         val_dataloader = None,
         config = None,
@@ -54,12 +55,20 @@ class VQDiffusionWorker:
         beta1 = config['trainer'][model_name]['beta1']
         beta2 = config['trainer'][model_name]['beta2']
 
-        self.vqdiffusion = model
+        vqvae = VQVAE(logger= logger, config = config)
+        logger.info(f"VQVAE model created")
+
+        self.vqdiffusion = VQDiffusion(vqvae, device=device, 
+                                    logger=logger, config = config)
+        logger.info(f"{model_name} models created")
+
+
         self.run = run
         self.experiment_dir = experiment_dir
         self.logger = logger
         self.model_name = model_name
-        self.save_img_dir = save_img_dir
+        self.save_img_dir = os.path.join(experiment_dir, "images")
+        os.makedirs(self.save_img_dir, exist_ok=True)
         self.args = args
         self.val_dataloader = val_dataloader
         self.global_step = 0

@@ -1,5 +1,5 @@
 architecture:
-  model_name: "gaussiandiffusion3d" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
+  model_name: "vae" # vae, vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
   vqvae:
     latent_channels: 256
     latent_size: 32
@@ -12,6 +12,18 @@ architecture:
     resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
     train_model: False # True, False
     freeze_weights: True # True, False
+  vae:
+    latent_channels: 256
+    latent_size: 32
+    intermediate_channels: [128, 128, 256, 256, 512]
+    num_residual_blocks_encoder: 2
+    num_residual_blocks_decoder: 3
+    dropout: 0.0
+    attention_resolution: [32]
+    resume_path: ''
+    train_model: True # True, False
+    freeze_weights: False # True, False
+
 
   vqvae_transformer:
     sos_token: 0
@@ -62,7 +74,7 @@ architecture:
 
 
 dataset:
-  dataset_name: 'mnist' # mnist, cifar10, InterHand26M, Oxford102Flower
+  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
   num_workers: 5
@@ -72,7 +84,7 @@ dataset:
   max_val_samples: 'inf'  #600, 'inf'
   train_split: 'train' # train, val; val for convergence test
   train_shuffle: True
-  subset: True #  True for subset, False for full dataset
+  subset: False #  True for subset, False for full dataset
   img_channels:
     Oxford102Flower: 3
     InterHand26M: 3
@@ -86,6 +98,11 @@ dataset:
     cifar10: 32
   
   batch_size:
+    vae:
+      Oxford102Flower: 20
+      InterHand26M: 20
+      mnist: 200
+      cifar10: 200
     vqgan: 
       Oxford102Flower: 20
       InterHand26M: 20
@@ -121,8 +138,13 @@ dataset:
 
 trainer:  
   num_epochs: 60
-  log_dir: "log"
+  log_dir: "zlog"
   num_workers: 5
+
+  vae:
+    learning_rate: 2.25e-04
+    beta1: 0.5
+    beta2: 0.9
 
   vqvae:
     learning_rate: 2.25e-04

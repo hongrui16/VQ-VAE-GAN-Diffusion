@@ -42,7 +42,7 @@ class VQDiffusion(nn.Module):
         sample_method = config['architecture'][model_name]['sample_method']
         loss_fn = config['architecture'][model_name]['loss_fn']
         return_all_timestamps = config['architecture'][model_name]['return_all_timestamps']
-
+        compute_indices_recon_loss = config['architecture'][model_name]['compute_indices_recon_loss']
 
         assert diffusion_type in ['VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'], "Diffusion type should be either 'VQ_Official', 'gaussiandiffusion2d', 'gaussiandiffusion3d'"
         assert indices_to_dist_fn in ['one_hot', 'lookup_table'], 'indices_to_dist_fn must be either one_hot or lookup_table'
@@ -118,6 +118,7 @@ class VQDiffusion(nn.Module):
                             sample_method = sample_method,
                             loss_fn = loss_fn,
                             return_all_timestamps = return_all_timestamps,
+                            compute_indices_recon_loss = compute_indices_recon_loss
                             )
         else:
             raise ValueError(f"Diffusion type {diffusion_type} not supported")

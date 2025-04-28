@@ -1,5 +1,5 @@
 architecture:
-  model_name: "gaussiandiffusion3d" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
+  model_name: "vqvae" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
   vqvae:
     latent_channels: 256
     latent_size: 16
@@ -9,9 +9,9 @@ architecture:
     dropout: 0.0
     attention_resolution: [16]
     num_codebook_vectors: 1024
-    resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
-    train_model: False # True, False
-    freeze_weights: True # True, False
+    resume_path: None #'/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/vqvae.pt'
+    train_model: True # True, False
+    freeze_weights: False # True, False
 
   vqvae_transformer:
     sos_token: 0
@@ -38,9 +38,10 @@ architecture:
     distribute_dim: -1 # probability distribution dim, -1 for last dimension, 1 for second dimension
     clipped_reverse_diffusion: True # False reulsts were bad.
     unet_dim: 3 # 3 for 3d, 2 for 2d
-    sample_method: 'ddim'
+    sample_method: 'ddpm' # ddim or ddpm
     loss_fn: 'noise_mse' # 'noise_mse', loss_fn in ['noise_mse', 'elbo']
-    return_all_timestamps: True
+    return_all_timestamps: False
+    compute_indices_recon_loss: True
 
 
   gaussiandiffusion2d:
@@ -62,7 +63,7 @@ architecture:
 
 
 dataset:
-  dataset_name: 'mnist' # mnist, cifar10, InterHand26M, Oxford102Flower
+  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
   num_workers: 5
@@ -83,7 +84,7 @@ dataset:
     Oxford102Flower: 256
     InterHand26M: 256
     mnist: 28
-    cifar10: 32
+    cifar10: 256
   
   batch_size:
     vqgan: 
@@ -100,12 +101,12 @@ dataset:
       Oxford102Flower: 20
       InterHand26M: 20
       mnist: 200
-      cifar10: 200
+      cifar10: 20
     vqdiffusion:
       Oxford102Flower: 20
       InterHand26M: 20
       mnist: 200
-      cifar10: 200
+      cifar10: 20
     gaussiandiffusion2d:
       Oxford102Flower: 40
       InterHand26M: 40
@@ -121,7 +122,7 @@ dataset:
 
 trainer:  
   num_epochs: 60
-  log_dir: "log"
+  log_dir: "zlog"
   num_workers: 5
 
   vqvae:

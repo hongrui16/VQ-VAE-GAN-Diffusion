@@ -10,21 +10,22 @@ import time
 import tqdm
 
 from utils.utils import print_gpu_memory_usage
+from network.vqvae.vqvae import VQVAE
+
+from network.vqTransformer.vqTransformer import VQTransformer
 
 class VQTransformerWorker:
     def __init__(
         self,
-        model: nn.Module,
         run: Run = None,
         experiment_dir: str = "experiments",
         device: str = "cpu",
         logger = None,
         train_dataset = None,
-        save_img_dir = None,
         args = None,
         val_dataloader = None,
         config = None,
-
+        save_ckpt_dir = None,
     ):
         model_name = config['architecture']['model_name']
         dataset_name = config['dataset']['dataset_name']
@@ -41,16 +42,26 @@ class VQTransformerWorker:
         beta1 = config['trainer'][model_name]['beta1']
         beta2 = config['trainer'][model_name]['beta2']
 
-        self.vqTransModel = model
         self.run = run
         self.experiment_dir = experiment_dir
         self.logger = logger
         self.model_name = model_name
-        self.save_img_dir = save_img_dir
+        self.save_img_dir = os.path.join(experiment_dir, "images")
+        os.makedirs(self.save_img_dir, exist_ok=True)
         self.args = args
         self.val_dataloader = val_dataloader
         self.global_step = 0
 
+        self.save_ckpt_dir = save_ckpt_dir
+        os.makedirs(self.save_ckpt_dir, exist_ok=True)
+
+        vqvae = VQVAE(logger= logger, config = config)
+        logger.info(f"VQVAE model created")
+
+
+        self.vqTransModel = VQTransformer(
+            vqvae, config = config, device=device
+        )
 
         self.vqTransModel.to(device)
         self.device = device
@@ -172,7 +183,7 @@ class VQTransformerWorker:
 
             if epoch == 0:
                 print_gpu_memory_usage(self.logger)
-            self.save_checkpoint(self.experiment_dir)
+            self.save_checkpoint(self.save_ckpt_dir)
 
             self.generate_images(epoch=epoch)
             torch.cuda.empty_cache()

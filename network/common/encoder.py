@@ -1,7 +1,4 @@
 """
-https://github.com/dome272/VQGAN-pytorch/blob/main/encoder.py
-
-Contains the encoder implementation of VQGAN. 
 
 The encoder is highly inspired by the - Denoising Diffusion Probabilistic Models - https://arxiv.org/abs/2006.11239
 According to the official implementation. 
@@ -10,13 +7,16 @@ According to the official implementation.
 # Importing Libraries
 import torch
 import torch.nn as nn
+import sys
 
-from network.vqgan.submodule.common import DownsampleBlock, GroupNorm, NonLocalBlock, ResidualBlock, Swish
+if __name__ == "__main__":
+    sys.path.append("../../..")
+
+from network.common.blocks import DownsampleBlock, GroupNorm, NonLocalBlock, ResidualBlock, Swish
 
 
 class Encoder(nn.Module):
     """
-    The encoder part of the VQGAN.
 
     Args:
         img_channels (int): Number of channels in the input image.
@@ -98,3 +98,19 @@ class Encoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
+
+
+if __name__ == "__main__":
+    # Test the Encoder class
+    encoder = Encoder(
+        img_channels=3,
+        image_size=256,
+        latent_channels=256,
+        intermediate_channels=[128, 128, 256, 256, 512],
+        num_residual_blocks=2,
+        dropout=0.0,
+        attention_resolution=[16],
+    )
+    x = torch.randn(1, 3, 256, 256)  # Example input tensor
+    output = encoder(x)
+    print(output.shape)  # Should print the shape of the output tensor # torch.Size([1, 256, 16, 16])

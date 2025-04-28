@@ -12,6 +12,7 @@ def load_cifar10(
     save_path: str = "data",
     split: str = "train",
     logger=None,
+    config = None,
 ) -> DataLoader:
     """Load the Cifar 10 data and returns the dataloaders (train ). The data is downloaded if it does not exist.
 
@@ -24,6 +25,11 @@ def load_cifar10(
     Returns:
         torch.utils.data.DataLoader: The data loader.
     """
+    mean = config['dataset']['mean']
+    std = config['dataset']['std']
+    train_shuffle = config['dataset']['train_shuffle']
+    subset = config['dataset']['subset']
+
 
     # Load the data
     if split == 'train':
@@ -63,6 +69,15 @@ def load_cifar10(
                 ),
             )
         
+    if subset:
+        if split == 'train':
+            max_samples = 10*batch_size if len(dataset) > 10*batch_size else len(dataset)
+            dataset = torch.utils.data.Subset(dataset, range(0, max_samples))
+        else:
+            max_samples = 4*batch_size if len(dataset) > 4*batch_size else len(dataset)
+            dataset = torch.utils.data.Subset(dataset, range(0, max_samples))
+
+
         dataloader = DataLoader(
             dataset,
             batch_size=batch_size,

@@ -1,7 +1,4 @@
 """
-https://github.com/dome272/VQGAN-pytorch/blob/main/decoder.py
-
-Contains the decoder implementation of VQGAN.
 
 The decoder architecture is also highly inspired by the - Denoising Diffusion Probabilistic Models - https://arxiv.org/abs/2006.11239
 According to the official implementation.  
@@ -10,13 +7,16 @@ According to the official implementation.
 # Importing Libraries
 import torch
 import torch.nn as nn
+import sys
 
-from network.vqgan.submodule.common import GroupNorm, NonLocalBlock, ResidualBlock, Swish, UpsampleBlock
+if __name__ == "__main__":
+    sys.path.append("../../..")
+
+from network.common.blocks import GroupNorm, NonLocalBlock, ResidualBlock, Swish, UpsampleBlock
 
 
 class Decoder(nn.Module):
     """
-    The decoder part of the VQGAN.
 
     The implementation is similar to the encoder but inverse, to produce an image from a latent vector.
 
@@ -101,3 +101,21 @@ class Decoder(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
+
+
+if __name__ == "__main__":
+    # Test the Decoder class
+    decoder = Decoder(
+        img_channels=3,
+        latent_channels=256,
+        latent_size=16,
+        intermediate_channels=[128, 128, 256, 256, 512],
+        num_residual_blocks=3,
+        dropout=0.0,
+        attention_resolution=[16],
+    )
+    # Create a random latent vector
+    latent_vector = torch.randn(1, 256, 16, 16)  # Batch size of 1, channels of 256, height and width of 16
+    # Pass the latent vector through the decoder
+    output = decoder(latent_vector)
+    print(output.shape)  # Should be (1, 3, 256, 256) for an image with 3 channels and size 256x256

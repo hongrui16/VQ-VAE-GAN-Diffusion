@@ -42,6 +42,7 @@ def load_dataloader(
             # save_path=save_path,
             split=split,
             logger=logger,
+            config = config,
         )
 
     elif name == "cifar10":
@@ -52,6 +53,7 @@ def load_dataloader(
             # save_path=save_path,
             split=split,
             logger=logger,
+            config = config,
         )
     elif name == "InterHand26M":
         return load_InterHand26M(

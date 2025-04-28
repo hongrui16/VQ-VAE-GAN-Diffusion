@@ -11,6 +11,8 @@ class OxfordFlowersDataset(Dataset):
             transform (callable, optional): Optional transform to be applied on a sample.
         """
         assert split in ['train', 'val']
+        if split == 'val':
+            split = 'valid'
         root_dir = os.path.join(root_dir, split)
         self.root_dir = root_dir
         self.transform = transform

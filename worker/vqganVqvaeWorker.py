@@ -19,23 +19,23 @@ import torchvision.utils as vutils
 
 from utils.utils import weights_init
 from utils.utils import print_gpu_memory_usage, denormalize
-from network.vqgan.submodule.discriminator import Discriminator
-
+from network.vqgan.discriminator import Discriminator
+from network.vqvae.vqvae import VQVAE
 
 class VQGANVQVAEWorker:
     """Trainer class for VQGAN, contains step, train methods"""
     def __init__(
         self,
-        model: torch.nn.Module,
+
         run: Run = None,
         device: str = "cpu",
         experiment_dir = None,
         logger = None,
         train_dataset = None,
-        save_img_dir = None,
         args = None,
         val_dataloader = None,
         config = None,
+        save_ckpt_dir = None,
     ):
         model_name = config['architecture']['model_name']
         dataset_name = config['dataset']['dataset_name']
@@ -68,16 +68,19 @@ class VQGANVQVAEWorker:
         self.device = device
         self.logger = logger
         self.model_name = model_name
-        self.save_img_dir = save_img_dir
+        self.save_img_dir = os.path.join(experiment_dir, "images")
+        os.makedirs(self.save_img_dir, exist_ok=True)
         self.args = args
         self.val_dataloader = val_dataloader
 
+        self.vqvae = VQVAE(logger= logger, config = config)
+        logger.info(f"VQVAE model created")
 
-        # VQGAN parameters
-        self.vqvae = model
+
         
         # Save directory
         self.expriment_save_dir = experiment_dir
+        self.save_ckpt_dir = save_ckpt_dir
 
         # Miscellaneous
         self.global_step = 0

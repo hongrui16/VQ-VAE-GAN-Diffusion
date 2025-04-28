@@ -7,9 +7,14 @@ Implementing the main VQGAN, containing forward pass, lambda calculation, and to
 import torch
 import torch.nn as nn
 import os, sys
-from network.vqgan.submodule.encoder import Encoder
-from network.vqgan.submodule.decoder import Decoder
-from network.vqgan.submodule.codebook import CodeBook
+
+if __name__ == "__main__":
+    sys.path.append("../..")
+
+from network.common.encoder import Encoder
+from network.common.decoder import Decoder
+
+from network.vqvae.submodule.codebook import CodeBook
 
 
 class VQVAE(nn.Module):
@@ -35,11 +40,11 @@ class VQVAE(nn.Module):
         config = None,
     ):
         super().__init__()
-        model_name = config['architecture']['model_name']
+
         dataset_name = config['dataset']['dataset_name']
         img_size = config["dataset"]["img_size"][dataset_name]
         img_channels = config['dataset']['img_channels'][dataset_name]
-        batch_size = config['dataset']["batch_size"][model_name][dataset_name]
+
         latent_channels = config["architecture"]["vqvae"]["latent_channels"]
         latent_size = config["architecture"]["vqvae"]["latent_size"]
         intermediate_channels = config["architecture"]["vqvae"]["intermediate_channels"]
@@ -82,8 +87,11 @@ class VQVAE(nn.Module):
         vqvae_resume_path = config["architecture"]["vqvae"]["resume_path"]
         if not vqvae_resume_path is None:
             if os.path.exists(vqvae_resume_path):
-                self.load_checkpoint(vqvae_resume_path)
-                logger.info(f"VQVAE loaded from {vqvae_resume_path}")
+                # self.load_checkpoint(vqvae_resume_path)
+                if logger is not None:
+                    logger.info(f"VQVAE loaded from {vqvae_resume_path}")
+                else:
+                    print(f"VQVAE loaded from {vqvae_resume_path}")
 
         freeze_weights = config['architecture']['vqvae']['freeze_weights'] or not config['architecture']['vqvae']['train_model']
 
@@ -98,7 +106,11 @@ class VQVAE(nn.Module):
                 param.requires_grad = False
             for param in self.post_quant_conv.parameters():
                 param.requires_grad = False
-            logger.info(f"VAE model is freezed")
+            
+            if logger is not None:
+                logger.info(f"VAE model is freezed")
+            else:
+                print(f"VAE model is freezed")
 
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -200,3 +212,37 @@ class VQVAE(nn.Module):
         """Saves the checkpoint to the given path."""
 
         torch.save(self.state_dict(), path)
+
+
+if __name__ == "__main__":
+    # Test the VQVAE class
+    config = {
+        "architecture": {
+            "vqvae": {
+                "intermediate_channels": [128, 128, 256, 256, 512],
+                "num_residual_blocks_encoder": 2,
+                "num_residual_blocks_decoder": 3,
+                "dropout": 0.0,
+                "attention_resolution": [32],
+                "latent_size": 16,
+                "latent_channels": 256,
+                "num_codebook_vectors": 1024,
+                "resume_path": None,
+                "freeze_weights": False,
+                "train_model": True,
+            }
+        },
+        "dataset": {
+            "dataset_name": "example_dataset",
+            "img_size": {"example_dataset": 256},
+            "img_channels": {"example_dataset": 3},
+        },
+    }
+    vqvae = VQVAE(config=config)
+    x = torch.randn(1, 3, 256, 256)  # Example input tensor
+    decoded_images, codebook_indices, codebook_loss = vqvae(x)
+
+    print("Decoded images shape:", decoded_images.shape)
+    print("Codebook indices shape:", codebook_indices.shape)
+    print("Codebook loss ", codebook_loss)
+    print("VQVAE model created successfully")

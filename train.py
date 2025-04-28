@@ -13,13 +13,14 @@ import shutil
 from dataloader.build_dataloader import load_dataloader
 
 
-from network.vqgan.vqvae import VQVAE
-from network.vqTransformer.vqTransformer import VQTransformer
-from network.vqDiffusion.vqDiffusion import VQDiffusion
 
+
+
+from worker.vaeWorker import VAEWorker
 from worker.vqganVqvaeWorker import VQGANVQVAEWorker
 from worker.vqTransformerWorker import VQTransformerWorker
 from worker.vqdiffusionWorker import VQDiffusionWorker
+
 from worker.gaussianDiffusion2DWorker import GaussianDiffusion2DWorker
 from worker.gaussianDiffusion3DWorker import GaussianDiffusion3DWorker
 
@@ -33,24 +34,27 @@ def main(args, config):
     dataset_name = config['dataset']["dataset_name"]
 
     if args.debug:
-        config['dataset']["batch_size"][model_name][dataset_name] = 1
+        config['dataset']["batch_size"][model_name][dataset_name] = 2
         train_split = 'val'
-        config['trainer']["num_workers"] = 1
-        
+        config['trainer']["num_workers"] = 1        
     else:
         train_split = config['dataset']["train_split"]
 
     log_dir = config['trainer']["log_dir"]
+    ckpt_dir = config['trainer']["ckpt_dir"] if not args.debug else log_dir
+
     num_epochs = config['trainer']["num_epochs"]
 
     current_timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
 
     exp_dir = os.path.join(log_dir, dataset_name, model_name, f'run_{current_timestamp}')
+    save_ckpt_dir = os.path.join(ckpt_dir, dataset_name, model_name, f'run_{current_timestamp}')
     os.makedirs(exp_dir, exist_ok=True)
+    os.makedirs(save_ckpt_dir, exist_ok=True)
     # checkpoint_dir = os.path.join(exp_dir, "checkpoints")
     # os.makedirs(checkpoint_dir, exist_ok=True)
-    save_dir = os.path.join(exp_dir, "generated_images")
-    os.makedirs(save_dir, exist_ok=True)
+
+
 
     
     log_path = os.path.join(exp_dir, "info.log")
@@ -86,23 +90,55 @@ def main(args, config):
     
     img_size = config["dataset"]["img_size"][dataset_name]
     in_channels = config['dataset']['img_channels'][dataset_name]
-    batch_size = config['dataset']["batch_size"][model_name][dataset_name]
 
-    if model_name.lower() in ['vqgan', 'vqvae', 'vqvae_transformer', 'vqgan_transformer', 'vqdiffusion']:
-        vqvae = VQVAE(logger= logger, config = config)
-        logging.info(f"VQVAE model created")
-            
+    if model_name in ['vae']:
+        # model_name = 'vae'
+        # dataset_name = config['dataset']['dataset_name']
+        # img_size = config["dataset"]["img_size"][dataset_name]
+        # img_channels = config['dataset']['img_channels'][dataset_name]
+        # batch_size = config['dataset']["batch_size"][model_name][dataset_name]
+
+        vae_worker = VAEWorker(
+            # run=run,
+            device=device,
+            experiment_dir=exp_dir,
+            logger = logger,
+            train_dataset=train_dataset,
+
+            args=args,
+            val_dataloader=val_dataloader,
+            config=config,
+            save_ckpt_dir=save_ckpt_dir,
+        )
+        logger.info('Initializing VAE Worker')
+        train_model = config['architecture']['vae']['train_model']
+        if train_model:
+            logger.info(f"Training {model_name} on {device} for {num_epochs} epoch(s).")
+            vae_worker.train(
+                dataloader=train_dataloader,
+                epochs=num_epochs,
+            )
+        
+        if args.debug:
+            vae_worker.generate_images(
+                n_images=10,
+                sample_from_normal_dist = True,
+
+            )
+
+    if model_name.lower() in ['vqgan', 'vqvae']:
+        
         vqgan_vqvae_worker = VQGANVQVAEWorker(
-            model=vqvae,
             # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
             train_dataset = train_dataset,
-            save_img_dir = save_dir,
             args = args,
             val_dataloader=val_dataloader,
             config = config,
+            save_ckpt_dir=save_ckpt_dir,
+
         )
         logger.info(f'Initializing {model_name.lower} Worker')
         train_model = config['architecture']['vqvae']['train_model']
@@ -113,23 +149,21 @@ def main(args, config):
                 epochs=num_epochs,
             )
 
-    if 'transformer' in model_name.lower():
-        vqgan_transformer = VQTransformer(
-            vqvae, config = config, device=device
-        )
+    if model_name.lower() in ['vqvae_transformer', 'vqgan_transformer']:
+        
         logging.info(f"{model_name} Transformer models created")
 
         vqTransformer_worker = VQTransformerWorker(
-            model=vqgan_transformer,
             # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
             train_dataset= train_dataset,
-            save_img_dir = save_dir,
             args = args,
             val_dataloader=val_dataloader,
             config = config,
+            save_ckpt_dir=save_ckpt_dir,
+
         )
         logger.info('Initializing Transformer Worker')
         train_model = config['architecture'][model_name]['train_model']
@@ -139,22 +173,19 @@ def main(args, config):
 
 
 
-    if 'vqdiffusion' in model_name.lower():
-        vqdiffusion = VQDiffusion(vqvae, device=device, 
-                                    logger=logger, config = config)
-        logging.info(f"{model_name} models created")
+    if model_name.lower() in ['vqdiffusion']:
 
         vqdiffusion_worker = VQDiffusionWorker(
-            model=vqdiffusion,
             # run=run,
             device=device,
             experiment_dir=exp_dir,
             logger = logger,
             train_dataset= train_dataset,
-            save_img_dir = save_dir,
             args = args,
             val_dataloader=val_dataloader,
             config = config,
+            save_ckpt_dir=save_ckpt_dir,
+
         )
         logger.info('Initializing Diffusion Worker')
         train_model = config['architecture'][model_name]['train_model']
@@ -179,7 +210,6 @@ def main(args, config):
 
         gaussian_diffusion_2d_worker = GaussianDiffusion2DWorker(gaussian_diffusion_2d, device=device, train_dataset=train_dataset,
                                                             experiment_dir  = exp_dir, args = args,
-                                                            save_img_dir = save_dir,
                                                             logger=logger, config = config)
         
         logger.info('Initializing Gaussian Diffusion Worker')
@@ -238,7 +268,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="configs/training_config_small.yml",
+        default="configs/training_config_large.yml",
         help="path to config file",
     )
     

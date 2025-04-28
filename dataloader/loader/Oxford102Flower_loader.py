@@ -37,7 +37,7 @@ def load_OxfordFlowers(
     assert split in ['train', 'val', 'test']
 
     if save_path is None:
-        data_dir = '/scratch/rhong5/dataset/Oxford102Flower'
+        data_dir = '/projects/kosecka/hongrui/dataset/oxford_flower/dataset'
     else:
         data_dir = save_path
         
@@ -46,7 +46,7 @@ def load_OxfordFlowers(
     
     mean = config['dataset']['mean']
     std = config['dataset']['std']
-    train_shuffle = config['dataset']['train_shuffle']
+
     subset = config['dataset']['subset']
 
     if split == 'train':

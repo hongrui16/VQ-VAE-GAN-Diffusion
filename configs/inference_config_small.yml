@@ -1,8 +1,6 @@
 architecture:
   model_name: "vqvae_transformer" # vqgan, vqvae, vqvae_transformer, vqgan_transformer, vqdiffusion, gaussiandiffusion2d, gaussiandiffusion3d
   vqvae:
-    img_channels: 3 # 1, 3
-    img_size: 256
     latent_channels: 256
     latent_size: 16
     intermediate_channels: [128, 128, 256, 256, 512]
@@ -27,7 +25,6 @@ architecture:
     resume_path: '/home/rhong5/research_pro/hand_modeling_pro/pytorch-vqgan/log/Oxford102Flower/vqgan/run_2024-07-15-15-05-14/transformer.pt'
   
   vqdiffusion: ## only for vqdiffusion
-    img_size: 256
     diffusion_steps: 500
     sampling_steps: 500
     noise_schedule: "linear"
@@ -48,7 +45,6 @@ architecture:
 
   gaussiandiffusion2d:
     resume_path: None
-    img_size: 256
     diffusion_steps: 500
     sampling_steps: 500
     train_model: False
@@ -56,7 +52,6 @@ architecture:
 
   gaussiandiffusion3d:
     resume_path: ''
-    img_size: 256 # 28 for mnist
     train_model: False
     freeze_weights: False
     n_samples: 36
@@ -68,10 +63,10 @@ architecture:
 
 
 dataset:
+  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
   mean: [0.485, 0.456, 0.406]
   std: [0.229, 0.224, 0.225]
   num_workers: 5
-  dataset_name: 'Oxford102Flower' # mnist, cifar10, InterHand26M, Oxford102Flower
   get_hand_mask: True ### True or False; only for InterHand26M
   return_annotations: False
   max_train_samples: 'inf'
@@ -79,6 +74,51 @@ dataset:
   train_split: 'train' # train, val; val for convergence test
   train_shuffle: True
   subset: True #  True for subset, False for full dataset
+  img_channels:
+    Oxford102Flower: 3
+    InterHand26M: 3
+    mnist: 1
+    cifar10: 3
+
+  img_size: 
+    Oxford102Flower: 256
+    InterHand26M: 256
+    mnist: 28
+    cifar10: 32
+  
+  batch_size:
+    vqgan: 
+      Oxford102Flower: 20
+      InterHand26M: 20
+      mnist: 200
+      cifar10: 200
+    vqvae:
+      Oxford102Flower: 20
+      InterHand26M: 20
+      mnist: 200
+      cifar10: 200
+    vqvae_transformer:
+      Oxford102Flower: 20
+      InterHand26M: 20
+      mnist: 200
+      cifar10: 200
+    vqdiffusion:
+      Oxford102Flower: 20
+      InterHand26M: 20
+      mnist: 200
+      cifar10: 200
+    gaussiandiffusion2d:
+      Oxford102Flower: 40
+      InterHand26M: 40
+      mnist: 500
+      cifar10: 400
+    gaussiandiffusion3d:
+      Oxford102Flower: 20
+      InterHand26M: 20
+      mnist: 500
+      cifar10: 400
+
+
 
 
 trainer:  
@@ -93,13 +133,11 @@ trainer:
     perceptual_loss_factor: 1.0
     rec_loss_factor: 1.0
     perceptual_model: "vgg"
-    batch_size: 20
 
   vqvae_transformer:
     learning_rate: 4.5e-04
     beta1: 0.9
     beta2: 0.95
-    batch_size: 20
   
   descriminator:
     disc_factor: 1.0
@@ -112,7 +150,6 @@ trainer:
     beta2: 0.95
     kl_loss_factor: 1.0
     rec_loss_factor: 1.0
-    batch_size: 20 # 20 for 3d_guassian, 10 for vq_official
     model_ema_steps: 10
     model_ema_decay: 0.995
     no_clip: False
@@ -122,12 +159,10 @@ trainer:
     adam_betas: (0.65, 0.95)
     kl_loss_factor: 1.0
     rec_loss_factor: 1.0
-    batch_size: 200
 
 
   gaussiandiffusion3d:
     learning_rate: 0.001
-    batch_size: 500 # 500 for 28x28, 200 for 64x64
     model_ema_steps: 10
     model_ema_decay: 0.995
     no_clip: False

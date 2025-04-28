@@ -91,7 +91,7 @@ class GaussianDiffusion3D(nn.Module):
         self.loss_fn = loss_fn
         assert loss_fn in ['noise_mse', 'elbo']
 
-        self.ddim_sampling_eta = 0.01
+        self.ddim_sampling_eta = 0.0
         self.self_condition = False
         self.sample_method = sample_method
 
@@ -261,7 +261,7 @@ class GaussianDiffusion3D(nn.Module):
         return x
     
     @torch.no_grad()
-    def ddpm_sample(self, n_samples, return_all_timestamps = False):
+    def ddpm_sample(self, n_samples, return_all_timestamps = False, clipped_reverse_diffusion=True):
         x_t = torch.randn((n_samples, self.in_channels, self.image_sizes[0], self.image_sizes[1])).to(self.device)
         imgs = [x_t]
         save_step = self.timesteps // self.num_timestamps
@@ -270,6 +270,9 @@ class GaussianDiffusion3D(nn.Module):
 
         for i in tqdm(range(self.timesteps-1, -1, -1), desc = "DDPM Sampling"):
             x = self.p_sample(x_t, i)
+            if clipped_reverse_diffusion:
+                x.clamp_(-1., 1.)
+
             x_t = x
             if return_all_timestamps and i % save_step == 0:
                 imgs.append(x)
@@ -281,7 +284,7 @@ class GaussianDiffusion3D(nn.Module):
         return ret
     
     @torch.no_grad()
-    def ddim_sample(self, n_samples, return_all_timestamps = False):
+    def ddim_sample(self, n_samples, return_all_timestamps = False, clipped_reverse_diffusion=True):
         eta = self.ddim_sampling_eta
 
         times = torch.linspace(-1, self.timesteps - 1, steps = self.sampling_timesteps)   # [-1, 0, 1, 2, ..., T-1] when sampling_timesteps == total_timesteps
@@ -308,6 +311,8 @@ class GaussianDiffusion3D(nn.Module):
             pred_noise=self.model(img, self_cond, time)
             # print('time:', time, 'pred_noise:', pred_noise.shape)  # time: tensor(276, device='cuda:0') pred_noise: torch.Size([16, 1, 256, 512])
             x_start = self.predict_start_from_noise(img, time, pred_noise)
+            if clipped_reverse_diffusion:
+                x_start.clamp_(-1., 1.)
             # print('img:', img.shape, 'x_start:', x_start.shape) #img: torch.Size([16, 1, 256, 512]) x_start: torch.Size([16, 1, 256, 512])
             if time_next < 0:
                 img = x_start
@@ -404,54 +409,54 @@ class GaussianDiffusion3D(nn.Module):
         loss = torch.nn.functional.mse_loss(pred_noise, noise)
         return loss
 
-    def forward(self, x_start):
-        b, c, h, w = x_start.shape
-        t = torch.randint(0, self.timesteps, (b,), device=self.device).long()
-        noise = torch.randn_like(x_start, device=self.device)
-        xt = self._forward_diffusion(x_start, t, noise)
-
-        if self.loss_fn == 'elbo':
-            loss = self.compute_elbo_loss(x_start, xt, t, noise)
-        elif self.loss_fn == 'noise_mse':
-            loss = self.compute_noise_loss(x_start, xt, t, noise)
-        return loss
-
-    @torch.no_grad()
-    def sampling(self, batch_size = 16, return_all_timestamps = False):
-        # print('sample_method:', self.sample_method, 'return_all_timestamps:', return_all_timestamps)
-        if self.sample_method == 'ddim':
-            return self.ddim_sample(batch_size, return_all_timestamps)
-        elif self.sample_method == 'ddpm':
-            return self.ddpm_sample(batch_size, return_all_timestamps)
-        else:
-            raise ValueError(f"Invalid sample method: {self.sample_method}")
-
-    
-    # def forward(self,x_start):
-    #     # x:NCHW
-    #     t=torch.randint(0,self.timesteps,(x_start.shape[0],)).to(x_start.device)
+    # def forward(self, x_start):
+    #     b, c, h, w = x_start.shape
+    #     t = torch.randint(0, self.timesteps, (b,), device=self.device).long()
     #     noise = torch.randn_like(x_start, device=self.device)
+    #     xt = self._forward_diffusion(x_start, t, noise)
 
-    #     x_t=self._forward_diffusion(x_start,t,noise)
-    #     pred_noise = self.model(x_t,t = t)
-    #     loss = torch.nn.functional.mse_loss(pred_noise,noise)
+    #     if self.loss_fn == 'elbo':
+    #         loss = self.compute_elbo_loss(x_start, xt, t, noise)
+    #     elif self.loss_fn == 'noise_mse':
+    #         loss = self.compute_noise_loss(x_start, xt, t, noise)
     #     return loss
 
     # @torch.no_grad()
-    # def sampling(self,n_samples,clipped_reverse_diffusion=True):
-    #     x_t=torch.randn((n_samples,self.in_channels,self.image_sizes[0], self.image_sizes[1])).to(self.device)
-    #     for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling"):
-    #         noise=torch.randn_like(x_t).to(self.device)
-    #         t=torch.tensor([i for _ in range(n_samples)]).to(self.device)
+    # def sampling(self, batch_size = 16, return_all_timestamps = False, clipped_reverse_diffusion=True):
+    #     # print('sample_method:', self.sample_method, 'return_all_timestamps:', return_all_timestamps)
+    #     if self.sample_method == 'ddim':
+    #         return self.ddim_sample(batch_size, return_all_timestamps, clipped_reverse_diffusion)
+    #     elif self.sample_method == 'ddpm':
+    #         return self.ddpm_sample(batch_size, return_all_timestamps, clipped_reverse_diffusion)
+    #     else:
+    #         raise ValueError(f"Invalid sample method: {self.sample_method}")
 
-    #         if clipped_reverse_diffusion:
-    #             x_t=self._reverse_diffusion_with_clip(x_t,t,noise)
-    #         else:
-    #             x_t=self._reverse_diffusion(x_t,t,noise)
+    
+    def forward(self,x_start):
+        # x:NCHW
+        t=torch.randint(0,self.timesteps,(x_start.shape[0],)).to(x_start.device)
+        noise = torch.randn_like(x_start, device=self.device)
 
-    #     x_t=(x_t+1.)/2. #[-1,1] to [0,1]
+        x_t=self._forward_diffusion(x_start,t,noise)
+        pred_noise = self.model(x_t,t = t)
+        loss = torch.nn.functional.mse_loss(pred_noise,noise)
+        return loss
 
-    #     return x_t
+    @torch.no_grad()
+    def sampling(self,n_samples,clipped_reverse_diffusion=True):
+        x_t=torch.randn((n_samples,self.in_channels,self.image_sizes[0], self.image_sizes[1])).to(self.device)
+        for i in tqdm(range(self.timesteps-1,-1,-1),desc="Sampling"):
+            noise=torch.randn_like(x_t).to(self.device)
+            t=torch.tensor([i for _ in range(n_samples)]).to(self.device)
+
+            if clipped_reverse_diffusion:
+                x_t=self._reverse_diffusion_with_clip(x_t,t,noise)
+            else:
+                x_t=self._reverse_diffusion(x_t,t,noise)
+
+        x_t=(x_t+1.)/2. #[-1,1] to [0,1]
+
+        return x_t
 
 
 
@@ -470,6 +475,8 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
         loss_fn = 'noise_mse',# 'noise_mse' or 'elbo'
         return_all_timestamps = False,
         clipped_reverse_diffusion = False,
+        compute_indices_recon_loss = False,
+ 
         ):
         
         super().__init__()
@@ -485,6 +492,8 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
         self.timesteps = timesteps
         self.return_all_timestamps = return_all_timestamps
         self.in_channels = 1
+        self.compute_indices_recon_loss = compute_indices_recon_loss
+        self.belta = 0.01
 
         image_sizes = [seq_length, gaussian_dim] 
         self.diffusion=GaussianDiffusion3D(
@@ -505,9 +514,6 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
         
         self.register_buffer('gaussian_lookup_table', look_up_table)
     
-    def indices_to_gaussian(self, indices):
-        return self.gaussian_lookup_table[indices]
-
     # def gaussian_to_indices(self, gaussian):
     #     # print('gaussian.shape', gaussian.shape) #torch.Size([16, 256, 512])
     #     # 确保输入的高斯分布向量形状为 [batch_size, num_indices, gaussian_dim]
@@ -530,9 +536,17 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
     #     closest_indices = closest_indices.reshape(batch_size, num_indices)
 
     #     return closest_indices
+
+    def indices_to_gaussian(self, indices):
+        return self.gaussian_lookup_table[indices]
+
     def gaussian_to_indices(self, gaussian):
-        # print('gaussian.shape', gaussian.shape) # torch.Size([16, 256, 512])
         # 确保输入的高斯分布向量形状为 [batch_size, num_indices, gaussian_dim]
+
+        if len(gaussian.shape)==4:
+            gaussian=gaussian.squeeze(1)
+        # print('gaussian.shape', gaussian.shape) # torch.Size([16, 256, 512])
+        
         batch_size, num_indices, gaussian_dim = gaussian.shape
 
         # 展平gaussian为 [batch_size * num_indices, gaussian_dim]
@@ -560,8 +574,25 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
         x0=self.indices_to_gaussian(indices_x0)
         if len(x0.shape)==3:
             x0=x0.unsqueeze(1)
-        loss = self.diffusion(x0)
-        
+                
+        t=torch.randint(0,self.timesteps,(x0.shape[0],)).to(x0.device)
+        noise = torch.randn_like(x0, device=self.device)
+
+        x_t=self.diffusion._forward_diffusion(x0,t,noise)
+        pred_noise = self.diffusion.model(x_t, t = t)
+
+        loss = torch.nn.functional.mse_loss(pred_noise,noise)
+
+        if self.compute_indices_recon_loss:
+            pred_x0 = self.diffusion.predict_start_from_noise(x_t, t , pred_noise)
+            # print('pred_x0.shape:', pred_x0.shape) #torch.Size([16, 1, 256, 512])
+            pred_indices = self.gaussian_to_indices(pred_x0)
+            # 计算 indices 的重构损失
+            recon_loss = F.mse_loss(pred_indices.float(), indices_x0.float())
+            # 计算总损失
+            loss = loss + self.belta * recon_loss
+            
+
         out = {}
         out['loss'] = loss
         return out
@@ -584,3 +615,11 @@ class VQGaussianDiffusion3DWrapper(nn.Module):
                 samples_dist=samples_dist.squeeze(1)
                 sample_indices = self.gaussian_to_indices(samples_dist)
         return sample_indices
+    
+
+if __name__ == '__main__':
+    diffusion = VQGaussianDiffusion3DWrapper(compute_indices_recon_loss = True)
+    indices = torch.randint(0, 1024, (16, 256), dtype = torch.long)
+
+    out = diffusion(indices)
+    print(out['loss'])

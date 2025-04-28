@@ -13,7 +13,7 @@ import shutil
 from dataloader.build_dataloader import load_dataloader
 
 
-from network.vqgan.vqvae import VQVAE
+from network.vqvae.vqvae import VQVAE
 from network.vqTransformer.vqTransformer import VQTransformer
 from network.vqDiffusion.vqDiffusion import VQDiffusion
 
@@ -30,13 +30,15 @@ from network.vqDiffusion.submodule.diffusion_gaussian3d import GaussianDiffusion
 
 def main(args, config):
     model_name = config['architecture']["model_name"]
+    dataset_name = config['dataset']["dataset_name"]
 
     if args.debug:
-        config['trainer'][model_name]["batch_size"] = 1
+        config['dataset']["batch_size"][model_name][dataset_name] = 1
         config['trainer']["num_workers"] = 1
 
-
-
+    img_size = config["dataset"]["img_size"][dataset_name]
+    in_channels = config['dataset']['img_channels'][dataset_name]
+    batch_size = config['dataset']["batch_size"][model_name][dataset_name]
 
     resume_path = config['architecture'][model_name]['resume_path']
     base_name = os.path.basename(resume_path)
@@ -73,8 +75,6 @@ def main(args, config):
         device = torch.device("cpu")
         
         logging.info("Using CPU")
-
-    
 
 
     if model_name.lower() in ['vqgan', 'vqvae', 'vqvae_transformer', 'vqgan_transformer', 'vqdiffusion']:
@@ -142,7 +142,6 @@ def main(args, config):
 
 
     if 'gaussiandiffusion2d' == model_name.lower():
-        img_size = config['architecture'][model_name]['img_size']
         unet2d = Unet2D(
             dim = 64,
             dim_mults = (1, 2, 4, 8),
@@ -171,10 +170,7 @@ def main(args, config):
     
     if 'gaussiandiffusion3d' == model_name.lower():
 
-        img_size = config['architecture'][model_name]['img_size']
-
         timesteps = config['architecture'][model_name]['diffusion_steps']
-        in_channels = config['architecture'][model_name]['input_channels']
         sampling_timesteps = config['architecture'][model_name]['sampling_steps']
         model_base_dim = config['architecture'][model_name]['model_base_dim']
         gaussian_diffusion_3d = GaussianDiffusion3D(
